@@ -50,7 +50,8 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
              myreactions[name]['muMax'] = float(param.text)/3600.0 # s^-1 
      for yields in reaction.iter('yield'):
          for param in yields.iter('param'):
-             myreactions[name]['yield'] =   param.get('name')
+             myreactions[name]['yields'].append(param.get('name'))
+             myreactions[name]['yieldFactors'].append(float(param.text))
      for kinetic in reaction.iter('kineticFactor'):
          if ( kinetic.get('class') == "MonodKinetic") :
             temp = CreateMonodKinetic()
@@ -317,6 +318,27 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
                                      
  cells_file.close( )
 
+ for species in root.findall('species'):
+    name = species.get('name')
+    type_id = celltypes[ name ]['id']
+
+    for reaction in species.findall('reaction'):
+       ReactionName = reaction.get('name')
+       for mol in myreactions[ReactionName]['yields'] :
+
+          if ( diffusibles.has_key(mol)  ):
+              continue
+          found = False
+          for inmol in celltypes[name]['molecules'] :
+             if ( inmol == mol ):
+                found = True
+                continue
+               
+          if ( not found ) : 
+              celltypes[name]['molecules'].append(mol)
+
+ # Read reactions inside every cell 
+ 
 
 # This is is commented becuase state and grid will be 
 # updated at every baseline step. Biocellion will find the steady-state

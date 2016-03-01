@@ -46,20 +46,20 @@ else {
         REAL dt;
 
         REAL colonyVolRatio = 0.0;
-        REAL a_uPrime[NUM_DIFFUSIBLE_ELEMS];/* rhs = uPrime * uScale * -1.0 + q */
-        REAL a_q[NUM_DIFFUSIBLE_ELEMS];
-        REAL a_uScale[NUM_DIFFUSIBLE_ELEMS];
-        REAL a_rhsToLow[NUM_DIFFUSIBLE_ELEMS];
-        REAL rhs;
+        //REAL a_uPrime[NUM_DIFFUSIBLE_ELEMS];/* rhs = uPrime * uScale * -1.0 + q */
+        //REAL a_q[NUM_DIFFUSIBLE_ELEMS];
+        //REAL a_uScale[NUM_DIFFUSIBLE_ELEMS];
+        //REAL a_rhsToLow[NUM_DIFFUSIBLE_ELEMS];
+        //REAL rhs;
 
         dt = BASELINE_TIME_STEP_DURATION / NUM_STATE_AND_GRID_TIME_STEPS_PER_BASELINE;
 
-        for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
-            a_uPrime[elemIdx] = 0.0;
-	    a_q[elemIdx] = 0.0;
-	    a_uScale[elemIdx] = 0.0;
-	    a_rhsToLow[elemIdx] = 0.0;
-	}
+        //for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
+        //    a_uPrime[elemIdx] = 0.0;
+	//    a_q[elemIdx] = 0.0;
+	//    a_uScale[elemIdx] = 0.0;
+	//    a_rhsToLow[elemIdx] = 0.0;
+	//}
 
 	/* iterate over 3 * 3 * 3 boxes */
 	for( S32 i = -1 ; i <= 1 ; i++ ) {
@@ -95,9 +95,9 @@ else {
 			if( ratio > 0.0 ) {
 			    REAL radius;
 			    REAL vol;
-			    REAL uptakePct;
-			    REAL secretionPct;
-                            REAL biomass;
+			    //REAL uptakePct;
+			    //REAL secretionPct;
+                            //REAL biomass;
 
 			    /* compute colony volume */
                             radius = spAgent.state.getRadius();
@@ -105,11 +105,11 @@ else {
                             colonyVolRatio += vol * ratio;
                             //cout <<  "vol " << vol << " ratio " << ratio <<endl;
 			    /* update uPrime and q */
-                            uptakePct = spAgent.state.getModelReal( CELL_MODEL_REAL_UPTAKE_PCT );
-                            secretionPct = spAgent.state.getModelReal( CELL_MODEL_REAL_SECRETION_PCT );
-                            biomass = spAgent.state.getModelReal( CELL_MODEL_REAL_BIOMAS) ; 
+                            //uptakePct = spAgent.state.getModelReal( CELL_MODEL_REAL_UPTAKE_PCT );
+                            //secretionPct = spAgent.state.getModelReal( CELL_MODEL_REAL_SECRETION_PCT );
+                            //biomass = spAgent.state.getModelReal( CELL_MODEL_REAL_BIOMAS) ; 
                             // here should go double for loop 
-                            a_uPrime[sourceIdx] += uptakePct*ratio * biomass   ;
+                            //a_uPrime[sourceIdx] += uptakePct*ratio * biomass   ;
                             //cout << "uprime:" <<  a_uPrime[0] <<" uptakePct:"<<uptakePct <<" ratio:"<<ratio<<endl;
 			}
 		    }
@@ -126,56 +126,56 @@ else {
 
 	v_gridModelRealNbrBox[GRID_MODEL_REAL_COLONY_VOL_RATIO].setVal( 0, 0, 0, colonyVolRatio );
 
-	for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
-	    a_uPrime[elemIdx] /= IF_GRID_SPACING * IF_GRID_SPACING * IF_GRID_SPACING;
-	    a_q[elemIdx] /= IF_GRID_SPACING * IF_GRID_SPACING * IF_GRID_SPACING;
-	}
+	//for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
+	//    a_uPrime[elemIdx] /= IF_GRID_SPACING * IF_GRID_SPACING * IF_GRID_SPACING;
+	//    a_q[elemIdx] /= IF_GRID_SPACING * IF_GRID_SPACING * IF_GRID_SPACING;
+	//}
 
 	/* compute uScale */
-	for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
-	    if( a_uPrime[elemIdx] > 0.0 ) {
-	        REAL oldUScale = 0.0;
-		REAL effPhi;
-		REAL newUScale;
+	//for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
+	//    if( a_uPrime[elemIdx] > 0.0 ) {
+	//       REAL oldUScale = 0.0;
+	//	REAL effPhi;
+	//	REAL newUScale;
 
-		oldUScale = v_gridModelRealNbrBox[3*elemIdx + 1 ].getVal(0,0,0);
+	//	oldUScale = v_gridModelRealNbrBox[3*elemIdx + 1 ].getVal(0,0,0);
 
-		effPhi = v_gridPhiNbrBox[elemIdx].getVal( 0, 0, 0 );
-		if( vIdx[0]  >= AGAR_HEIGHT ) {
-		    effPhi /= colonyVolRatio;
-		}
+	//	effPhi = v_gridPhiNbrBox[elemIdx].getVal( 0, 0, 0 );
+	//	if( vIdx[0]  >= AGAR_HEIGHT ) {
+	//	    effPhi /= colonyVolRatio;
+	//	}
 		//CHECK( effPhi + A_Ks[elemIdx] > 0.0 );
 		//newUScale = effPhi / ( effPhi + A_Ks[elemIdx] );
-                newUScale = BiomasRate(0, 1.0, effPhi, 1.0 ) ;
+          //      newUScale = BiomasRate(0, 1.0, effPhi, 1.0 ) ;
 
-		if( oldUScale > U_SCALE_LIMIT_THRESHOLD ) {
-		    if( newUScale > oldUScale * U_SCALE_MAX_INC_RATIO ) {
-		         newUScale = oldUScale * U_SCALE_MAX_INC_RATIO;
-		    }
-		}
-		else {
-		    if( newUScale > U_SCALE_LIMIT_THRESHOLD * U_SCALE_MAX_INC_RATIO ) {
-		        newUScale = U_SCALE_LIMIT_THRESHOLD * U_SCALE_MAX_INC_RATIO;
-		    }
-		}
+	//	if( oldUScale > U_SCALE_LIMIT_THRESHOLD ) {
+	//	    if( newUScale > oldUScale * U_SCALE_MAX_INC_RATIO ) {
+	//	         newUScale = oldUScale * U_SCALE_MAX_INC_RATIO;
+	//	    }
+	//	}
+	//	else {
+	//	    if( newUScale > U_SCALE_LIMIT_THRESHOLD * U_SCALE_MAX_INC_RATIO ) {
+	//	        newUScale = U_SCALE_LIMIT_THRESHOLD * U_SCALE_MAX_INC_RATIO;
+	//	    }
+	//	}
 
-		a_uScale[elemIdx] = newUScale;
-	    }
+	//	a_uScale[elemIdx] = newUScale;
+	//    }
 
 	    //if( elemIdx == DIFFUSIBLE_ELEM_GLUCOSE ) {
-	    v_gridModelRealNbrBox[3*elemIdx+1].setVal(0,0,0,a_uScale[elemIdx]);
+	//    v_gridModelRealNbrBox[3*elemIdx+1].setVal(0,0,0,a_uScale[elemIdx]);
 	    //}
-	}
+	//}
 
         //if ( colonyVolRatio > 0.0 ) 
         //    cout <<" u':"<<a_uPrime[0]<<" u_s:"<<a_uScale[0]<<" q:"<<a_q[0]<< endl;
 
 	// update rhs 
-	for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
-	   rhs = 20.0 *a_uPrime[elemIdx]*a_uScale[elemIdx] * -1.0 + a_q[elemIdx];
+	//for( S32 elemIdx = 0 ; elemIdx < NUM_DIFFUSIBLE_ELEMS ; elemIdx++ ) {
+	//  rhs = 20.0 *a_uPrime[elemIdx]*a_uScale[elemIdx] * -1.0 + a_q[elemIdx];
 	//rhs += glucoseQ;
-	   v_gridModelRealNbrBox[3*elemIdx + 2 ].setVal(0,0,0,rhs);
-        }
+	//   v_gridModelRealNbrBox[3*elemIdx + 2 ].setVal(0,0,0,rhs);
+        //}
 
 	// nutrients floating in the air 
 	//if ( ( vIdx[0] >= AGAR_HEIGHT ) && ( colonyVolRatio <= 0.0 ) ) {
@@ -351,11 +351,11 @@ void ModelRoutine::updateIfGridAdvectionVelocityDomainBdry( const S32 elemIdx, c
 	return;
 }
 
-void ModelRoutine::updateIfGridRHSLinear( const S32 elemIdx, const VIdx& vIdx, const UBAgentData& ubAgentData, const Vector<REAL>& v_gridPhi/* [elemIdx] */, const Vector<REAL>& v_gridModelReal/* [elemIdx] */, const Vector<S32>& v_gridModelInt/* [elemIdx] */, REAL& gridRHS/* uptake(-) and secretion (+) */ ) {
+//void ModelRoutine::updateIfGridRHSLinear( const S32 elemIdx, const VIdx& vIdx, const UBAgentData& ubAgentData, const Vector<REAL>& v_gridPhi/* [elemIdx] */, const Vector<REAL>& v_gridModelReal/* [elemIdx] */, const Vector<S32>& v_gridModelInt/* [elemIdx] */, REAL& gridRHS/* uptake(-) and secretion (+) */ ) {
 	/* MODEL START */
 
         //gridRHS=rhs+rhs_from_high;//check grid_model_real_e in model_define.h
-	gridRHS = v_gridModelReal[3*elemIdx+2] ;
+//	gridRHS = v_gridModelReal[3*elemIdx+2] ;
        
         //if ( v_gridModelReal[GRID_MODEL_REAL_COLONY_VOL_RATIO]  > 0.0 )
         //          cout <<"rhs" <<  gridRHS << endl;        
@@ -364,8 +364,8 @@ void ModelRoutine::updateIfGridRHSLinear( const S32 elemIdx, const VIdx& vIdx, c
 
 	/* MODEL END */
 
-	return;
-}
+//	return;
+//}
 
 void ModelRoutine::adjustIfGridRHSTimeDependentLinear( const S32 elemIdx, const VIdx& vIdx, const REAL gridPhi, const Vector<REAL>& v_gridModelReal/* [elemIdx] */, const Vector<S32>& v_gridModelInt/* [elemIdx] */, REAL& gridRHS/* INOUT, uptake(-) and secretion (+) */ ) {
 	/* MODEL START */

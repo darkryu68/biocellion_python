@@ -83,7 +83,19 @@ void ModelRoutine::addSpAgents( const BOOL init, const VIdx& startVIdx, const VI
                          state.setModelReal( CELL_MODEL_REAL_INERT, inert );
                          state.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, 1.0 );
                          state.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, 1.0 );
-                         state.setModelInt( CELL_MODEL_INT_BOND_B, 0 ) ; 
+                         state.setModelInt( CELL_MODEL_INT_BOND_B, 0 ) ;
+   
+                         Vector<REAL> v_odeNetVal; 
+                         v_odeNetVal = state.getODEValArray( 0 );
+                         if ( v_odeNetVal.size() > 0 ) {
+                            for( S32 i = 0 ; i < ( S32 )v_odeNetVal.size() ; i++ ) {
+                                v_odeNetVal[i] = 0.0;
+                            }
+                            if ( A_BIOMASS_ODE_INDEX[ cellInitData.a_type ] != -1 ) {
+                               S32 ode_idx = A_BIOMASS_ODE_INDEX[cellInitData.a_type ] ;
+                               v_odeNetVal[ode_idx] = biomass;
+                            }  
+                         }
 
                          CHECK( ifGridHabitableBoxData.get( posVIdx ) == true );
                          v_spAgentVIdx.push_back( posVIdx );
@@ -105,15 +117,6 @@ void ModelRoutine::addSpAgents( const BOOL init, const VIdx& startVIdx, const VI
    return;
 }
 
-void ModelRoutine::spAgentCRNODERHS( const S32 odeNetIdx, const VIdx& vIdx, const SpAgent& spAgent, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox, const Vector<double>& v_y, Vector<double>& v_f ) {
-	/* MODEL START */
-
-	ERROR( "unimplemented." );
-
-	/* MODEL END */
-
-	return;
-}
 
 void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo& junctionInfo, const VReal& vOffset, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox/* [elemIdx] */, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox/* [elemIdx] */, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox/* [elemIdx] */, SpAgentState& state/* INOUT */ ) {
     /* MODEL START */
@@ -128,88 +131,90 @@ void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo
 
 
     S32 type = state.getType() ; // id of cell type 
-    S32 pdeIdx  = A_AGENT_GROWTH_SOURCE[type] ;//index of the sol needed to update biomass
+    //S32 pdeIdx  = A_AGENT_GROWTH_SOURCE[type] ;//index of the sol needed to update biomass
 
     /// this part can be encapsulated in another function
     if( uptakePct > 0.0 ) {/* live */
-        REAL uScale = 0.0;
+       REAL a_avg_diff[ NUM_DIFFUSIBLE_ELEMS  ]  ;
+       for ( S32 i = 0; i < NUM_DIFFUSIBLE_ELEMS; i++ )
+          a_avg_diff[ i  ] = 0.0;    
 
-         if ( NUM_DIFFUSIBLE_ELEMS > 0 ) {
+       if ( NUM_DIFFUSIBLE_ELEMS > 0 ) {
 
-            for( S32 i = -1 ; i <= 1 ; i++ ) {
-                for( S32 j = -1 ; j <= 1 ; j++ ) {
-                    for( S32 k = -1 ; k <= 1 ; k++ ) {
-                       if( aaa_ratio[i + 1][j+1][k + 1] > 0.0 ) {
-                               CHECK( ( idx_t )( vIdx[0] + i ) < Info::getDomainSize( 0 ) );
-                               uScale += v_gridModelRealNbrBox[ 3*pdeIdx + 1 ].getVal( i, j, k ) * aaa_ratio[i + 1][j+1][k + 1];
-                            
-                       }
+          for( S32 i = -1 ; i <= 1 ; i++ ) {
+             for( S32 j = -1 ; j <= 1 ; j++ ) {
+                for( S32 k = -1 ; k <= 1 ; k++ ) {
+                   if( aaa_ratio[i + 1][j+1][k + 1] > 0.0 ) {
+                      CHECK( ( idx_t )( vIdx[0] + i ) < Info::getDomainSize( 0 ) );
+                      for (S32 dIndx =0 ; dIndx < NUM_DIFFUSIBLE_ELEMS; dIndx++ ) { 
+                           a_avg_diff[ dIndx  ]  += v_gridPhiNbrBox[ dIndx  ].getVal( i, j, k ) * aaa_ratio[i + 1][j+1][k + 1];
+                      }        
                    }
                 }
-            }
-         }
-         else {
-             uScale = 1.0;
-         }
+             }
+          }
+       }
          //cout << "VIdx:"<<vIdx[0] << "," << vIdx<<[1]<<","<<vIDx[0]
 
          //cout<<"phi " <<  v_gridPhiNbrBox[0].getVal(0,0,0) << " phi -z:" <<v_gridPhiNbrBox[0].getVal(0,0,1)<< " phi +z:" <<v_gridPhiNbrBox[0].getVal(0,1,+1) << " phi -x-y:" << v_gridPhiNbrBox[0].getVal(-1,-1,0) <<" phi -x:" << v_gridPhiNbrBox[0].getVal(-1,0,0) << " phi -x+y:" << v_gridPhiNbrBox[0].getVal(-1,1,0)   <<endl;
          
-         REAL dt = BASELINE_TIME_STEP_DURATION/NUM_STATE_AND_GRID_TIME_STEPS_PER_BASELINE;
-         REAL Biomas = state.getModelReal(CELL_MODEL_REAL_BIOMAS );
-         REAL Inert = state.getModelReal(CELL_MODEL_REAL_INERT ); 
+       //REAL dt = BASELINE_TIME_STEP_DURATION/NUM_STATE_AND_GRID_TIME_STEPS_PER_BASELINE;
+       REAL Biomas = state.getModelReal(CELL_MODEL_REAL_BIOMAS );
+       REAL Inert = state.getModelReal(CELL_MODEL_REAL_INERT ); 
 
-         //Biomas += 1.0* A_MuMax[ type  ]*uScale*uptakePct * Biomas * dt;// solving Monod Kinetic
-         Biomas += BiomasRate(type, Biomas, uScale, uptakePct) * dt;// solving Monod Kinetic
-         REAL cellVol = ( Biomas + Inert ) / A_DENSITY_BIOMASS[ type ] ;
+       if ( A_BIOMASS_ODE_INDEX[ type ] != -1 ) {
+          S32 ode_idx = A_BIOMASS_ODE_INDEX[ type ] ; 
+          Biomas = state.getODEVal( 0 ,  ode_idx  );  
+       }
+       
+       REAL cellVol = ( Biomas + Inert ) / A_DENSITY_BIOMASS[ type ] ;
 
-         if ( cellVol > MAX_CELL_VOL ) {
-              cellVol = MAX_CELL_VOL ;
-              Biomas = cellVol * A_DENSITY_BIOMASS[ type ]  - Inert ;
-
-         } 
-         CHECK( cellVol >= 0.0 );
-         REAL newRadius = radius_from_volume( cellVol );     
+       if ( cellVol > MAX_CELL_VOL ) {
+          cellVol = MAX_CELL_VOL ;
+          Biomas = cellVol * A_DENSITY_BIOMASS[ type ]  - Inert ;
+       } 
+       CHECK( cellVol >= 0.0 );
+       REAL newRadius = radius_from_volume( cellVol );     
          //cout<<"biomas:"<<Biomas<<" rad:"<<newRadius<<  " uscale:"<<uScale<<" dt: " << dt <<    endl;
           
-         state.setRadius( newRadius );
-         state.setModelReal( CELL_MODEL_REAL_BIOMAS, Biomas );
+       state.setRadius( newRadius );
+       state.setModelReal( CELL_MODEL_REAL_BIOMAS, Biomas );
 
-         if( uptakePct < 1.0 ) {
-             CHECK( UPTAKE_PCT_INC_RATIO >= 1.0 );
-             uptakePct *= UPTAKE_PCT_INC_RATIO;
-             if( uptakePct > 1.0 ) {
-                uptakePct = 1.0;
-             }
-             state.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, uptakePct );
-         }
+       if( uptakePct < 1.0 ) {
+           CHECK( UPTAKE_PCT_INC_RATIO >= 1.0 );
+           uptakePct *= UPTAKE_PCT_INC_RATIO;
+           if( uptakePct > 1.0 ) {
+              uptakePct = 1.0;
+           }
+           state.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, uptakePct );
+       }
 
-         if( secretionPct < 1.0 ) {
-             CHECK( SECRETION_PCT_CHANGE_RATIO >= 1.0 );
-             secretionPct *= SECRETION_PCT_CHANGE_RATIO;
-             if( secretionPct > 1.0 ) {
-                secretionPct = 1.0;
-             }
-             state.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, secretionPct );
-         }
+       if( secretionPct < 1.0 ) {
+          CHECK( SECRETION_PCT_CHANGE_RATIO >= 1.0 );
+          secretionPct *= SECRETION_PCT_CHANGE_RATIO;
+          if( secretionPct > 1.0 ) {
+             secretionPct = 1.0;
+          }
+          state.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, secretionPct );
+       }
 
          // check if bnd should be gnerated 
  
-         if ( A_AGENT_BOND_BOUNDARY_S[type] > 0.0 ) {
-            REAL R0 =A_AGENT_SHOVING_SCALE[type]*state.getRadius();
-            REAL x=((REAL)vIdx[0] +0.5+vOffset[0])*IF_GRID_SPACING;
-            REAL dist_b = FABS(x - AGAR_HEIGHT*IF_GRID_SPACING);
-            if (state.getModelInt(CELL_MODEL_INT_BOND_B)==0){
-               if (dist_b < R0*A_AGENT_BOND_BOUNDARY_CREATE[type]){
-                  state.setModelInt(CELL_MODEL_INT_BOND_B,1); 
-               } 
-            } 
-            else{
-               if (dist_b> R0*A_AGENT_BOND_BOUNDARY_DESTROY[type]){
-                  state.setModelInt(CELL_MODEL_INT_BOND_B,0); 
-               }   
-            }
-         }
+       if ( A_AGENT_BOND_BOUNDARY_S[type] > 0.0 ) {
+          REAL R0 =A_AGENT_SHOVING_SCALE[type]*state.getRadius();
+          REAL x=((REAL)vIdx[0] +0.5+vOffset[0])*IF_GRID_SPACING;
+          REAL dist_b = FABS(x - AGAR_HEIGHT*IF_GRID_SPACING);
+          if (state.getModelInt(CELL_MODEL_INT_BOND_B)==0){
+             if (dist_b < R0*A_AGENT_BOND_BOUNDARY_CREATE[type]){
+                state.setModelInt(CELL_MODEL_INT_BOND_B,1); 
+             } 
+          } 
+          else{
+             if (dist_b> R0*A_AGENT_BOND_BOUNDARY_DESTROY[type]){
+               state.setModelInt(CELL_MODEL_INT_BOND_B,0); 
+             }   
+          }
+       }
     }
     else {/* dead */
            // Still nothing to do here
@@ -329,7 +334,6 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
     motherState.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, 1.0 );
     motherState.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, 1.0 );
 
-    
     dougther_biomas = biomas - mother_biomas;
     dougther_inert = inert - mother_inert;
 
@@ -347,6 +351,13 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
     daughterState.setModelReal( CELL_MODEL_REAL_INERT, dougther_inert );
     daughterState.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, 1.0 );
     daughterState.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, 1.0 );
+
+    // change the new biomass on the  ODEs
+    if ( A_BIOMASS_ODE_INDEX[ type_id ] != -1 ) {
+       S32 ode_idx = A_BIOMASS_ODE_INDEX[type_id];
+       motherState.setODEVal(0, ode_idx, mother_biomas);
+       daughterState.setODEVal(0, ode_idx, dougther_biomas);
+    }
 
     //dir[0] = 0.0;
     //dir[1] = 0.0;

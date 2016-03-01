@@ -17,6 +17,7 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
  config.write("\t///// UpdateSpAgentInfo \n")
  config.write("\tSpAgentInfo info; \n")
  config.write("\tv_spAgentInfo.resize(NUM_AGENT_TYPES);\n")
+ config.write("\tODENetInfo odeNetInfo;\n\n")
 
  dMax = 0.0;
  for cell in celltypes:
@@ -29,15 +30,30 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
 
  for cell in celltypes:
 
+    if ( len( celltypes[cell]['molecules'] ) ) > 0 :
+       config.write("\todeNetInfo.numVars = NUM_ODE_NET_VAR_"+cell+";\n")
+       config.write("\todeNetInfo.stiff = ODE_STIFF_NORMAL;\n")
+       config.write("\todeNetInfo.h = 0.1;\n")
+       config.write("\todeNetInfo.hm = 0.01;\n")
+       config.write("\todeNetInfo.epsilon = 1e-6;\n")
+       config.write("\todeNetInfo.threshold = 1e-3;\n")
+       config.write("\todeNetInfo.errorThresholdVal = 0.0;\n")
+       config.write("\todeNetInfo.warningThresholdVal = 0.0;\n")
+       config.write("\todeNetInfo.setNegToZero = false;\n\n")
+ 
+
     config.write("\tinfo.dMax = " + str( dMax  ) +";\n")
     config.write("\tinfo.hasBool = false;\n")
     config.write("\tinfo.numBoolVars = 0;\n")
     config.write("\tinfo.numStateModelReals = ")
-    config.write(" NUM_MODEL_REALS; \n") # his will change cell->
+    config.write("CELL_NUM_MODEL_REALS; \n") # his will change cell->
     config.write("\tinfo.numStateModelInts = NUM_MODEL_INTS ;\n")
     config.write("\tinfo.numExtraMechIntrctModelReals = 0;\n")
     config.write("\tinfo.numExtraMechIntrctModelInts = 0;\n")
-    config.write("\tinfo.v_odeNetInfo.clear();\n")
+    if ( len( celltypes[cell]['molecules'] ) ) > 0 :
+       config.write("\tinfo.v_odeNetInfo.push_back( odeNetInfo );\n")
+    else :    
+       config.write("\tinfo.v_odeNetInfo.clear();\n")
     config.write("\tv_spAgentInfo[AGENT_TYPE_")
     config.write(cell + "] = info;\n\n")
  config.write("\treturn;\n")

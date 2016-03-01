@@ -8,7 +8,8 @@ def diffusible_solutes():
     solute['Dcoef_agar'] = 0.0 # Diff. coefficient agar
     solute['degradation'] = 0.0  # degradation rate
     solute['ini_con_cd'] = 0.0 # initial concentration in computation domain
-    solute['ini_con_agar'] = 0.0 # initial concentration  agar
+    solute['ini_con_agar'] = 0.0 # initial concentration agar
+    solute['rhs'] = []  # list of reactions
     return solute 
 
 # high level parameters for cell types
@@ -23,15 +24,19 @@ def cell_types():
     ctype['inert_density'] = 0.0 # density of cell
     ctype['shape'] = 'sphere' # spherical shape (we consider only shperical or cylindrical
     ctype['id'] = 0  # identifier for biocellion 
-    ctype['reactions'] = []  # set of names of reactions 
+    ctype['molecules'] = []  # names of internal molecules of GRNs 
+    ctype['VolFactor'] = False # divide the concentration by Volume 
+    ctype['reactions'] = [] # internal reations
     return ctype 
+
 
 # high level parameters for intracellular reactions
 def create_reaction():
     '''Returns a dictionary that represent a reaction '''
     reactionfactor = dict()
     reactionfactor['catalyzedby'] = ''
-    reactionfactor['yield'] = ''
+    reactionfactor['yields'] = [] # list of molecules
+    reactionfactor['yieldFactors'] = [] # wigth assigned afeter reaction
     reactionfactor['muMax'] = 0.0  # factor
     reactionfactor['MonodKinetic']  = []  # a list of Monod reactions
     reactionfactor['SimpleInhibition'] = [] # a lis of simple inhibition 
@@ -48,7 +53,8 @@ def CreateSimpleInhibition():
     '''Returns a dictionary that represent a SimpleInhibition '''    
     SimpleInhibition = dict()
     SimpleInhibition['Ki'] = 0.0
-    MonodKinetic['solute'] = '' # name of the solute,  
+    simpleInhibition['solute'] = '' # name of the solute,  
+    return simpleInhibition 
     
  
 
