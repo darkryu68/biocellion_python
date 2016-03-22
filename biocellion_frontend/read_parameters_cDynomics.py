@@ -11,6 +11,8 @@ from BiocellionParam  import diffusible_solutes, cell_types, domain_parameters, 
 from ReadcDynomics import read_xml
 from WriteBcellHeader import write_biocell_header
 from WriteBcellConfig import write_biocell_config
+from WriteBcellAgent import write_biocell_agent
+from WriteBcellGrid import write_biocell_grid
 from WriteBcellXML import write_bcell_xml  
 from WriteBcellOtherFiles import write_biocell_otherfiles  
 
@@ -20,8 +22,12 @@ from WriteBcellOtherFiles import write_biocell_otherfiles
 #xmlfilename = './examples/basic-growth-noAgar.xml'
 #dirname = './examples/basic_growth_noAgar'
 
-xmlfilename = './examples/basic-growth-noAgar-1Relaxation-3D.xml'
-dirname = './examples/basic_growth_noAgar_1Relaxation_3D'
+#xmlfilename = './examples/basic-growth-noAgar-1Relaxation-3D.xml'
+#dirname = './examples/basic_growth_noAgar_1Relaxation_3D'
+
+xmlfilename = './examples/basic-growth.xml'
+dirname = './examples/basic_growth'
+
 
 #xmlfilename = './examples/3DInducedWrinkle.xml'
 #dirname = './examples/InducedWrinkled'
@@ -66,6 +72,8 @@ if ( mydomain['nDim'] == 2 ) :
 
 write_biocell_header(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model' )
 write_biocell_config(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
+write_biocell_agent(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
+write_biocell_grid(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
 write_bcell_xml(diffusibles, celltypes, myreactions, myforces, mydomain,mygridsolver, mysimulator, dirname+'/model')
 write_biocell_otherfiles(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
 

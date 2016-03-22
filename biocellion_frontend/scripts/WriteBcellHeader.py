@@ -29,9 +29,20 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
  header.write("\tCELL_MODEL_REAL_INERT,\n")
  header.write("\tCELL_MODEL_REAL_UPTAKE_PCT,\n")
  header.write("\tCELL_MODEL_REAL_SECRETION_PCT,\n")
- header.write("\tNUM_MODEL_REALS\n")
+ for sol in diffusibles:
+     header.write("\tCELL_MODEL_REAL_"+sol+"_AVG,\n") 
+
+ header.write("\tCELL_NUM_MODEL_REALS\n")
  header.write("} alive_cell_model_real_e;\n\n")
- 
+
+ for cell in celltypes:
+    if ( len( celltypes[cell]['molecules'] ) ) > 0 :
+       header.write("typedef enum _ode_net_"+ cell +"_var_e {   \n")
+       for mol in celltypes[cell]['molecules']: 
+          header.write("\tODE_NET_VAR_"+cell+"_"+mol+",\n")
+       header.write("\tNUM_ODE_NET_VAR_"+ cell +"\n")
+       header.write("} ode_net_"+cell+"_var_e;\n\n")
+
  header.write("typedef enum _alive_cell_model_int_e { \n")
  header.write("\tCELL_MODEL_INT_BOND_B, \n")
  header.write("\tNUM_MODEL_INTS \n")
@@ -165,6 +176,18 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
      header.write( comma +   str( celltypes[cell]['biomass_density']))
      comma = ", "
  header.write("};\n\n")
+
+ header.write("const S32 A_BIOMASS_ODE_INDEX[NUM_AGENT_TYPES]={")
+ comma = "" 
+ for cell in celltypes: 
+     ode_idx = "-1"
+     for reaction in celltypes[cell]['molecules']:
+         if (reaction == "biomass") :
+            ode_idx = "ODE_NET_VAR_"+cell+"_biomass" ; 
+     header.write( comma + ode_idx  )
+     comma = ", "
+ header.write("};\n\n")
+
 
  header.write("const REAL A_DENSITY_INERT[NUM_AGENT_TYPES]={")
  comma = "" 
@@ -332,35 +355,38 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
     header.write("inline REAL radius_from_volume( REAL volume ) {\n")
     header.write("\treturn CBRT( volume * 3.0 / ( 4.0 * MY_PI ) );\n")
     header.write("}\n\n")    
- 
+
+ header.write("inline REAL MonodEquation(  REAL Kc , REAL u ) {\n")
+ header.write("\treturn  u / ( Kc + u ) ;\n")
+ header.write("}\n\n") 
  # Write the biomas rate equation, it depends of cell type
- header.write("inline REAL BiomasRate(S32 type, REAL Biomass, REAL uscale, REAL uptake) {\n")  
- header.write("switch (type)  {\n")
- for cell in celltypes: 
-    header.write("case "+ str( celltypes[cell]['id'] ) + ":\n" )
+ #header.write("inline REAL BiomasRate(S32 type, REAL Biomass, REAL uscale, REAL uptake) {\n")  
+ #header.write("switch (type)  {\n")
+ #for cell in celltypes: 
+ #   header.write("case "+ str( celltypes[cell]['id'] ) + ":\n" )
     
-    name = ""
-    for reaction_name in celltypes[cell]['reactions']:
-        if ( myreactions[reaction_name]['yield'] == "biomass" ):
-             name = reaction_name   
-    if ( name == "") :
-       header.write("\treturn 0.0; \n")
-    else :
-       if ( len( myreactions[name]['MonodKinetic'] ) > 0 ):
-          header.write("\treturn " + str(myreactions[name]['muMax']) )
-          for reaction_i in myreactions[name]['MonodKinetic'] :
-             if ( reaction_i['Ks'] != 0.0 ) :   
-                header.write("* ( uscale/("+str(reaction_i['Ks'])+" +uscale))")
-          header.write("  * Biomass * uptake ; \n")
-       else :       
-            header.write("\treturn " + str(myreactions[name]['muMax']) + "; \n")
+ #   name = ""
+ #   for reaction_name in celltypes[cell]['reactions']:
+ #       if ( myreactions[reaction_name]['yields'] == "biomass" ):
+ #            name = reaction_name   
+ #   if ( name == "") :
+ #      header.write("\treturn 0.0; \n")
+ #   else :
+ #      if ( len( myreactions[name]['MonodKinetic'] ) > 0 ):
+ #         header.write("\treturn " + str(myreactions[name]['muMax']) )
+ #         for reaction_i in myreactions[name]['MonodKinetic'] :
+ #            if ( reaction_i['Ks'] != 0.0 ) :   
+ #               header.write("* ( uscale/("+str(reaction_i['Ks'])+" +uscale))")
+ #         header.write("  * Biomass * uptake ; \n")
+ #      else :       
+ #           header.write("\treturn " + str(myreactions[name]['muMax']) + "; \n")
 
-    header.write("\tbreak;\n" ) 
+ #   header.write("\tbreak;\n" ) 
 
- header.write("default :\n")
- header.write("\treturn 0.0; \n")
- header.write("\tbreak; \n")
- header.write("};\n\n")
- header.write("}\n")
+ #header.write("default :\n")
+ #header.write("\treturn 0.0; \n")
+ #header.write("\tbreak; \n")
+ #header.write("};\n\n")
+ #header.write("}\n")
 
  header.write("#endif\n")

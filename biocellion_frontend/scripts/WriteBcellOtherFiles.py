@@ -5,17 +5,17 @@ from BiocellionParam  import diffusible_solutes, cell_types, domain_parameters, 
 def write_biocell_otherfiles( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, directory ):
 
  # write info of the agents
- agentf  = open(directory+"/model_routine_agent.cpp", 'w')
- input_agentf   = open('template/model_routine_agent.cpp', 'r')
- for line in input_agentf:
-     agentf.write(line)
+ #agentf  = open(directory+"/model_routine_agent.cpp", 'w')
+ #input_agentf   = open('template/model_routine_agent.cpp', 'r')
+ #for line in input_agentf:
+ #    agentf.write(line)
    
  
  # write info of the grid
- gridf  = open(directory+"/model_routine_grid.cpp", 'w')
- input_gridf   = open('template/model_routine_grid.cpp', 'r')
- for line in input_gridf:
-     gridf.write(line)
+ #gridf  = open(directory+"/model_routine_grid.cpp", 'w')
+ #input_gridf   = open('template/model_routine_grid.cpp', 'r')
+ #for line in input_gridf:
+ #    gridf.write(line)
    
   
  # write info of the agents
