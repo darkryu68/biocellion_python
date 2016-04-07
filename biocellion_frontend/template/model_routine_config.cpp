@@ -26,8 +26,9 @@ void ModelRoutine::updateIfGridSpacing( REAL& ifGridSpacing ) {
 void ModelRoutine::updateOptModelRoutineCallInfo( OptModelRoutineCallInfo& callInfo ) {
 	/* MODEL START */
 
-	callInfo.numUpdateIfGridVarPreStateAndGridStepRounds = 1;
-	callInfo.numUpdateIfGridVarPostStateAndGridStepRounds = 0;
+        callInfo.numComputeMechIntrctIters = 1;
+	callInfo.numUpdateIfGridVarPreStateAndGridStepIters = 1;
+	callInfo.numUpdateIfGridVarPostStateAndGridStepIters = 0;
 
 	/* MODEL END */
 
@@ -36,7 +37,7 @@ void ModelRoutine::updateOptModelRoutineCallInfo( OptModelRoutineCallInfo& callI
 
 void ModelRoutine::updateDomainBdryType( domain_bdry_type_e a_domainBdryType[DIMENSION] ) {
 	/* MODEL START */
-
+        // this may be periodic?  // an array with the VALUES.
 	a_domainBdryType[0] = DOMAIN_BDRY_TYPE_NONPERIODIC_HARD_WALL;
 	a_domainBdryType[1] = DOMAIN_BDRY_TYPE_NONPERIODIC_HARD_WALL;
 	a_domainBdryType[2] = DOMAIN_BDRY_TYPE_NONPERIODIC_HARD_WALL;
@@ -67,11 +68,11 @@ void ModelRoutine::updateTimeStepInfo( TimeStepInfo& timeStepInfo ) {
 	return;
 }
 
-void ModelRoutine::updateSyncMethod( sync_method_e& extraMechIntrctSyncMethod, sync_method_e& updateIfGridVarSyncMethod/* dummy if both callUpdateIfGridVarPreStateAndGridStep and callUpdateIfGridVarPostStateAndGridStep are set to false in ModelRoutine::updateOptModelRoutineCallInfo */ ) {
+void ModelRoutine::updateSyncMethod( sync_method_e& mechIntrctSyncMethod, sync_method_e& updateIfGridVarSyncMethod/* dummy if both callUpdateIfGridVarPreStateAndGridStep and callUpdateIfGridVarPostStateAndGridStep are set to false in ModelRoutine::updateOptModelRoutineCallInfo */ ) {
 	/* MODEL START */
 
-	extraMechIntrctSyncMethod = SYNC_METHOD_OVERWRITE;
-	updateIfGridVarSyncMethod = SYNC_METHOD_OVERWRITE;
+	mechIntrctSyncMethod = SYNC_METHOD_PER_VAR;
+	updateIfGridVarSyncMethod = SYNC_METHOD_PER_VAR;
 
 	/* MODEL END */
 
@@ -97,9 +98,9 @@ void ModelRoutine::updateJunctionEndInfo( Vector<JunctionEndInfo>& v_junctionEnd
 void ModelRoutine::updateRNGInfo( Vector<RNGInfo>& v_rngInfo ) {
 	/* MODEL START */
 
-	CHECK( NUM_MODEL_RNGS == 2 );
+	CHECK( NUM_MODEL_RNGS == 3 );
 
-	v_rngInfo.resize( 2 );
+	v_rngInfo.resize( 3 );
 
 	RNGInfo rngInfo;
 
@@ -114,6 +115,12 @@ void ModelRoutine::updateRNGInfo( Vector<RNGInfo>& v_rngInfo ) {
         rngInfo.param1 = 1.1;
         rngInfo.param2 = 0.0;/* dummy */
         v_rngInfo[MODEL_RNG_UNIFORM_10PERCENT] = rngInfo ;
+ 
+        rngInfo.type = RNG_TYPE_GAUSSIAN;
+        rngInfo.param0 = 0.0;
+        rngInfo.param1 = 1.0;
+        rngInfo.param2 = 0.0;/* dummy */
+        v_rngInfo[MODEL_RNG_GAUSSIAN] = rngInfo;
 
 	/* MODEL END */
 
@@ -121,19 +128,25 @@ void ModelRoutine::updateRNGInfo( Vector<RNGInfo>& v_rngInfo ) {
 }
 
 void ModelRoutine::updateFileOutputInfo( FileOutputInfo& fileOutputInfo ) {
-	/* MODEL START */
+    /* MODEL START */
 
-	fileOutputInfo.particleOutput = true;
-	fileOutputInfo.particleNumExtraOutputVars = 3;
-	fileOutputInfo.v_gridPhiOutput.assign( NUM_DIFFUSIBLE_ELEMS, true );
-	fileOutputInfo.v_gridPhiOutputDivideByKappa.assign( NUM_DIFFUSIBLE_ELEMS, false );
+    fileOutputInfo.particleOutput = true;
+    //fileOutputInfo.particleNumExtraOutputVars = NUM_AGENT_OUTPUTS ;
+       
+    fileOutputInfo.v_particleExtraOutputScalarVarName.assign(NUM_AGENT_OUTPUTS, "");
+    for ( S32 i=0 ; i < NUM_AGENT_OUTPUTS ; i++ ) { 
+        fileOutputInfo.v_particleExtraOutputScalarVarName[i] = "ext";
+    }
 
-	/* MODEL END */
+    fileOutputInfo.v_particleExtraOutputVectorVarName.clear();
+    fileOutputInfo.v_gridPhiOutput.assign(NUM_DIFFUSIBLE_ELEMS, true);
+    fileOutputInfo.v_gridPhiOutputDivideByKappa.assign(NUM_DIFFUSIBLE_ELEMS,false );
 
-	return;
+    /* MODEL END */
+    return;
 }
 
-void ModelRoutine::updateGlobalData( Vector<U8>& v_globalData ) {
+void ModelRoutine::initGlobal( Vector<U8>& v_globalData ) {
    /* MODEL START */
 
    Vector<string> v_modelParam;
@@ -204,12 +217,6 @@ void ModelRoutine::updateGlobalData( Vector<U8>& v_globalData ) {
          for( idx_t k = 0 ; k < ifRegionSize[2]  ; k++ ) {
             UBInitData& ubInitData = p_ubInitData[VIdx::getIdx3DTo1D( i, j, k, ifRegionSize )];
             ubInitData.numCells = 0;
-            ubInitData.x_offset = 0.0 ;
-            ubInitData.y_offset = 0.0 ;
-            ubInitData.z_offset = 0.0 ;
-            ubInitData.a_type = 0 ;
-            ubInitData.biomass = 0.0 ;
-            ubInitData.inert = 0.0 ;
             ubInitData.IdxIniCellData  = -1 ;
          }
       }

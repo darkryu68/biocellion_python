@@ -15,17 +15,17 @@ def write_bcell_xml(diffusibles, celltypes, myreactions, myforces, mydomain, myg
  bcell_ny = mydomain['ny']
  bcell_nz = mydomain['nz'] 
  bcell_partition_size = 32 # multiple of max(4,refine_ratio^(AMR_levels - 1)*2(minimum box size))
- bcell_path = "/users/baguilar/biocellion_models/XXXX/output"   
+ bcell_path = directory + "/output"   
  bcell_interval = int( mysimulator['outputPeriod'] ) # output interval
- bcell_start_x = mydomain['agar_heigth'] # start position from which results will be printed
+ bcell_start_x = 0  # start position from which results will be printed
  bcell_start_y = 0 
  bcell_start_z = 0   
- bcell_size_x = mydomain['nx'] # size of the region for printing 
+ bcell_size_x = mydomain['nx'] + mydomain['agar_heigth'] # size of the region for printing 
  bcell_size_y = mydomain['ny'] 
  bcell_size_z = mydomain['nz']
 
  # Biocellion optional parameteres
- bcell_input_param = "/users/baguilar/biocellion_models/XXXX/model/cells.txt"
+ bcell_input_param = directory +  "/cells.txt"
  bcell_verbosity = 1 # [0-5] 
 
  bcell_num_threads = 8
@@ -34,9 +34,9 @@ def write_bcell_xml(diffusibles, celltypes, myreactions, myforces, mydomain, myg
  bcell_num_sockets_per_node = 2
  bcell_max_load_imbalance = 1.2
  
- bcell_super_x = 128
+ bcell_super_x = 64
  bcell_super_y = 64 
- bcell_super_z = 32 
+ bcell_super_z = 64 
  
  bcell_summary = 1 
  bcell_load_balance = 1200
@@ -72,7 +72,7 @@ def write_bcell_xml(diffusibles, celltypes, myreactions, myforces, mydomain, myg
  xml_output  = SubElement(xml_required, 'output ')
  xml_output.set('path',bcell_path)
  xml_output.set('interval', str(bcell_interval) )
- xml_output.set('particle',"pvtu")
+ xml_output.set('particle',"pvtp")
  xml_output.set('grid',"vtm")
  xml_output.set('start_x', str(bcell_start_x) )  
  xml_output.set('start_y', str(bcell_start_y) )

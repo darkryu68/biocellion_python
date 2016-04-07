@@ -37,94 +37,84 @@ void ModelRoutine::initJunctionSpAgent( const VIdx& vIdx0, const SpAgent& spAgen
 	return;
 }
 
-void ModelRoutine::computeForceSpAgent( const VIdx& vIdx0, const SpAgent& spAgent0, const Vector<REAL>& v_gridPhi0/* [elemIdx] */, const Vector<REAL>& v_gridModelReal0/* [elemIdx] */, const Vector<S32>& v_gridModelInt0/* [elemIdx] */, const VIdx& vIdx1, const SpAgent& spAgent1, const Vector<REAL>& v_gridPhi1/* [elemIdx] */, const Vector<REAL>& v_gridModelReal1/* [elemIdx] */, const Vector<S32>& v_gridModelInt1/* [elemIdx] */, const VReal& dir/* unit direction vector from spAgent1 to spAgent0 */, const REAL& dist, VReal& force/* force on spAgent0 due to interaction with spAgent1 (force on spAgent1 due to interaction with spAgent0 has same magnitude but the opposite direction), if force has the same direction with dir, two cells push each other, if has the opposite direction, two cells pull each other. */ ) {
-	/* MODEL START */
-        S32 type0 = spAgent0.state.getType();  
-        S32 type1 = spAgent1.state.getType(); 
+void ModelRoutine::computeMechIntrctSpAgent( const S32 iter, const VIdx& vIdx0, const SpAgent& spAgent0, const UBEnv& ubEnv0, const VIdx& vIdx1, const SpAgent& spAgent1, const UBEnv& ubEnv1, const VReal& dir/* unit direction vector from spAgent1 to spAgent0 */, const REAL& dist, MechIntrctData& mechIntrctData0, MechIntrctData& mechIntrctData1, BOOL& link, JunctionEnd& end0/* dummy if link == false */, JunctionEnd& end1/* dummy if link == false */, BOOL& unlink ) {
 
-	REAL R0 = A_AGENT_SHOVING_SCALE[type0]*spAgent0.state.getRadius() ;
-        REAL R1 = A_AGENT_SHOVING_SCALE[type1]*spAgent1.state.getRadius();
-        REAL D = R0 + R1 ;
-	REAL mag = 0.0;/* + for repulsive force, - for adhesive force */
-        REAL xij  = D - dist;
+    /* MODEL START */
+    link = false;
+    unlink = false;
 
-        //if (  spAgent0.junctionInfo.getCurId() == 48  )  {
-        //   cout<<dist<<" "<<spAgent1.junctionInfo.getCurId()<<" "<<R0<<" "<<R1<<endl;
-        //} 
-      
+    S32 type0 = spAgent0.state.getType();
+    S32 type1 = spAgent1.state.getType();
 
-	if( dist <= D  ) {/* shoving to remove the overlap */
-            mag = 0.5 * ( xij );
-	}
-        else {/* adhesion */
-            if ( A_AGENT_ADHESION_S[type0][type1] == 0.0 ) {
-                mag = 0.0;
-            }
-            else {
-                //REAL x = dist / D;
+    REAL R0 = A_AGENT_SHOVING_SCALE[type0]*spAgent0.state.getRadius();
+    REAL R1 = A_AGENT_SHOVING_SCALE[type1]*spAgent1.state.getRadius();
+    REAL dist_threshold = R0 + R1;
+    REAL D = R0 + R1 - 0.5*A_AGENT_SHOVING_LIMIT[type0] - 0.5*A_AGENT_SHOVING_LIMIT[type1]; 
+    REAL mag = 0.0;
+    REAL xij  = D - dist ; 
+    
+  
+    if( dist <= D ) {/* shoving */
+        mag = 0.5 * (xij) ;
+    }
+    else {/* adhesion */
+        if( A_AGENT_ADHESION_S[type0][type1] > 0.0 )  {
 #if REAL_IS_FLOAT
-                mag = 0.5 * xij * expf(- xij*xij  / A_AGENT_ADHESION_S[type0][type1]  );
+            mag = 0.5 * xij*expf( -xij*xij / A_AGENT_ADHESION_S[type0][type1] );
 #else
-                mag = 0.5 * xij * exp( - xij*xij  / A_AGENT_ADHESION_S[type0][type1]  );
-#endif
-                //mag = 0.0; 
-            }
+            mag = 0.5 * xij*exp( -xij*xij / A_AGENT_ADHESION_S[type0][type1] );
+#endif 
         }
+    }         
 
-        // Bonds
-        if (spAgent0.junctionInfo.isLinked(spAgent1.junctionInfo) == true) {
-            REAL sij = A_AGENT_BOND_S[type0][type1] ;
-            if ( sij  >  0.0 ) {    
+    if ( A_AGENT_BOND_S[type0][type1] > 0.0 ){
+        REAL sij = A_AGENT_BOND_S[type0][type1] ;
+        if(spAgent0.junctionData.isLinked(spAgent1.junctionData) == true) {
+            if( dist > A_AGENT_BOND_DESTROY_FACTOR[type0]* dist_threshold ) {
+                unlink = true;/* break junction */
+            }
+            else{
+                // compute elastic force
+                REAL D = R0 + R1;
+                REAL xij  = D - dist  ;
 #if REAL_IS_FLOAT
-                mag = mag + 0.5 * xij * tanhf( FABS(xij) * sij);
+                REAL Fij = 0.5 * xij * tanhf(FABS(xij)*sij);
 #else
-                mag = mag + 0.5 * xij * tanh( FABS(xij) * sij);
+                REAL Fij = 0.5 * xij * tanh(FABS(xij)*sij);
 #endif
+                mag = mag + Fij ;
             }
-        } 
-
- 
-        force  =  VReal::ZERO;
-        for( S32 dim = 0 ; dim < SYSTEM_DIMENSION ; dim++ ) {
-                force[dim] = mag * dir[dim];
-        }
-
-        //force[2] = 0.0 ;
-	/* MODEL END */
-
-	return;
-}
-
-void ModelRoutine::computeExtraMechIntrctSpAgent( const VIdx& vIdx0, const SpAgent& spAgent0, const Vector<REAL>& v_gridPhi0/* [elemIdx] */, const Vector<REAL>& v_gridModelReal0/* [elemIdx] */, const Vector<S32>& v_gridModelInt0/* [elemIdx] */, const VIdx& vIdx1, const SpAgent& spAgent1, const Vector<REAL>& v_gridPhi1/* [elemIdx] */, const Vector<REAL>& v_gridModelReal1/* [elemIdx] */, const Vector<S32>& v_gridModelInt1/* [elemIdx] */, const VReal& dir/* unit direction vector from spAgent1 to spAgent0 */, const REAL& dist, ExtraMechIntrctData& extraMechIntrctData0, ExtraMechIntrctData& extraMechIntrctData1, BOOL& link, JunctionEnd& end0/* dummy if link == false */, JunctionEnd& end1/* dummy if link == false */, BOOL& unlink ) {
-	/* MODEL START */
-
-	link = false;
-	unlink = false;
-
-        S32 type0 = spAgent0.state.getType();
-        S32 type1 = spAgent1.state.getType();
-
-        REAL R0 = A_AGENT_SHOVING_SCALE[type0]*spAgent0.state.getRadius();
-        REAL R1 = A_AGENT_SHOVING_SCALE[type1]*spAgent1.state.getRadius();
-
-        REAL dist_threshold = A_AGENT_BOND_DESTROY_FACTOR[type0] *(R0 + R1);
-
-        if( spAgent0.junctionInfo.isLinked( spAgent1.junctionInfo ) == true ) {
-           if( dist > dist_threshold ) {
-              unlink = true;/* break junction */
-           }
         }
         else {/* no junction */
-           if(  dist < dist_threshold  ) {
-              link = true;/* form junction */
-              end0.setType(0);
-              end1.setType(0);
-           }
+            if( dist < A_AGENT_BOND_CREATE_FACTOR[type0]*dist_threshold ) {
+                link = true;/* form junction */
+                end0.setType(0);
+                end1.setType(0);
+
+                // add force rigth away
+                REAL D = R0 + R1;
+                REAL xij  = D - dist  ;
+#if REAL_IS_FLOAT
+                REAL Fij = 0.5 * xij * tanhf(FABS(xij)*sij);
+#else
+                REAL Fij = 0.5 * xij * tanh(FABS(xij)*sij);
+#endif
+                mag = mag + Fij ;
+            }
         }
+    }
 
-	/* MODEL END */
+    mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_X,dir[0]*mag);
+    mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_Y,dir[1]*mag);
+    mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_Z,dir[2]*mag);
 
-	return;
+    mechIntrctData1.setModelReal(CELL_MECH_REAL_FORCE_X,-dir[0]*mag);
+    mechIntrctData1.setModelReal(CELL_MECH_REAL_FORCE_Y,-dir[1]*mag);
+    mechIntrctData1.setModelReal(CELL_MECH_REAL_FORCE_Z,-dir[2]*mag);
+
+    /* MODEL END */
+
+    return;
 }
 #endif
 

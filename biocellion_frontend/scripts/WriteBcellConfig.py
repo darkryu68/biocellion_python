@@ -15,6 +15,8 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
  config.write("#if HAS_SPAGENT\n")
  config.write("void ModelRoutine::updateSpAgentInfo( Vector<SpAgentInfo>& v_spAgentInfo ) {\n")
  config.write("\t///// UpdateSpAgentInfo \n")
+ config.write("\tMechModelVarInfo modelVarInfo;\n")
+ config.write("\tmodelVarInfo.syncMethod = VAR_SYNC_METHOD_DELTA;/* computeMechIntrct */\n")
  config.write("\tSpAgentInfo info; \n")
  config.write("\tv_spAgentInfo.resize(NUM_AGENT_TYPES);\n")
  config.write("\tODENetInfo odeNetInfo;\n\n")
@@ -48,8 +50,8 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
     config.write("\tinfo.numStateModelReals = ")
     config.write("CELL_NUM_MODEL_REALS; \n") # his will change cell->
     config.write("\tinfo.numStateModelInts = NUM_MODEL_INTS ;\n")
-    config.write("\tinfo.numExtraMechIntrctModelReals = 0;\n")
-    config.write("\tinfo.numExtraMechIntrctModelInts = 0;\n")
+    config.write("\tinfo.v_mechIntrctModelRealInfo.assign( NUM_CELL_MECH_REALS, modelVarInfo );\n")
+    config.write("\tinfo.v_mechIntrctModelIntInfo.clear(); \n")
     if ( len( celltypes[cell]['molecules'] ) ) > 0 :
        config.write("\tinfo.v_odeNetInfo.push_back( odeNetInfo );\n")
     else :    
@@ -61,19 +63,22 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
  config.write("#endif\n\n")
 
 
- config.write("void ModelRoutine::updatePDEInfo( Vector<PDEInfo>& v_pdeInfo ) {\n")
+ config.write("void ModelRoutine::updatePhiPDEInfo( Vector<PDEInfo>& v_phiPDEInfo ) {\n")
  config.write("\t///// UpdatePDEInfo \n")
  config.write("\tPDEInfo pdeInfo;\n")
  config.write("\tGridPhiInfo gridPhiInfo;\n")
- config.write("\tv_pdeInfo.resize( NUM_DIFFUSIBLE_ELEMS );\n")
+ config.write("\tv_phiPDEInfo.resize( NUM_DIFFUSIBLE_ELEMS );\n")
 
  for sol in diffusibles:
+    config.write("\tpdeInfo.pdeIdx =  DIFFUSIBLE_ELEM_"+sol+";\n")
     config.write("\tpdeInfo.pdeType = PDE_TYPE_REACTION_DIFFUSION_TIME_DEPENDENT_LINEAR;\n");
     config.write("\tpdeInfo.numLevels = A_NUM_AMR_LEVELS[DIFFUSIBLE_ELEM_")
     config.write(sol + "];\n")
+    config.write("\tpdeInfo.ifLevel = A_NUM_AMR_LEVELS[DIFFUSIBLE_ELEM_")
+    config.write(sol + "] - 1 ;\n")
     config.write("\tpdeInfo.numTimeSteps = A_NUM_PDE_TIME_STEPS_PER_STATE_AND_GRID_STEP[DIFFUSIBLE_ELEM_")
     config.write(sol + "];\n")
-    config.write("\tpdeInfo.callAdjustRHSTimeDependentLinear=false;\n")
+    #config.write("\tpdeInfo.callAdjustRHSTimeDependentLinear=false;\n")
     config.write("\tpdeInfo.mgSolveInfo.numPre = 3;\n")
     config.write("\tpdeInfo.mgSolveInfo.numPost = 3;\n")
     config.write("\tpdeInfo.mgSolveInfo.numBottom = 3;\n")
@@ -129,7 +134,7 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
     
     config.write("\tgridPhiInfo.setNegToZero = true;\n")
     config.write("\tpdeInfo.v_gridPhiInfo.assign(1,gridPhiInfo );\n")
-    config.write("\tv_pdeInfo[DIFFUSIBLE_ELEM_")
+    config.write("\tv_phiPDEInfo[DIFFUSIBLE_ELEM_")
     config.write(sol + "] = pdeInfo;") 
     config.write("\n\n")
   
@@ -162,22 +167,23 @@ def write_biocell_config( diffusibles, celltypes, myreactions, myforces, mydomai
 
 
  
- config.write("void ModelRoutine::updateSummaryOutputInfo( SummaryOutputInfo& summaryOutputInfo ) {\n\n" )
- config.write("\tsummaryOutputInfo.v_realName.resize( NUM_GRID_SUMMARY_REALS );\n")
- config.write("\tsummaryOutputInfo.v_realType.resize( NUM_GRID_SUMMARY_REALS );\n")
+ config.write("void ModelRoutine::updateSummaryOutputInfo( Vector<SummaryOutputInfo>& v_summaryOutputRealInfo, Vector<SummaryOutputInfo>& v_summaryOutputIntInfo ) {\n\n" )
+
+ config.write("\tSummaryOutputInfo info;\n")
+ config.write("\tv_summaryOutputIntInfo.clear();\n")
+
+ config.write("\tv_summaryOutputRealInfo.resize( NUM_GRID_SUMMARY_REALS );\n")
 
  for sol in diffusibles:
-    config.write("\tsummaryOutputInfo.v_realName[GRID_SUMMARY_REAL_")
-    config.write( sol+"] = \"" + sol + "\";\n")
-    config.write("\tsummaryOutputInfo.v_realType[GRID_SUMMARY_REAL_")
-    config.write( sol+"] = SUMMARY_TYPE_MAX;\n")
+    config.write("\tinfo.name  = \"" + sol + "\";\n")
+    config.write("\tinfo.type  = SUMMARY_TYPE_MAX;\n")
+    config.write("\tv_summaryOutputRealInfo[GRID_SUMMARY_REAL_"+ sol  +"] = info;\n\n")
 
  for cell in celltypes:
-    config.write("\tsummaryOutputInfo.v_realName[GRID_SUMMARY_REAL_LIVE_")
-    config.write( cell+"] = \"" +cell+ " cells(live) volume\"; \n")
-    config.write("\tsummaryOutputInfo.v_realType[GRID_SUMMARY_REAL_LIVE_")
-    config.write( cell+"] = SUMMARY_TYPE_SUM;\n ")
-   
+    config.write("\tinfo.name = \"" +cell+ " cells(live) volume\"; \n") 
+    config.write("\tinfo.type  = SUMMARY_TYPE_SUM;\n")
+    config.write("\tv_summaryOutputRealInfo[GRID_SUMMARY_REAL_LIVE_"+ cell  +"] = info;\n\n")
+
  config.write("\n\treturn;\n")
  config.write("}\n\n")
 

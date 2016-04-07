@@ -1,11 +1,16 @@
 import os
-import sys 
+import sys
+import math 
 from BiocellionParam  import diffusible_solutes, cell_types, domain_parameters, mechanical_parameters, multigrid_solver_parm, basic_simulation_param 
-from BiocellionParam import create_reaction, CreateMonodKinetic, CreateSimpleInhibition
+from BiocellionParam import create_reaction, CreateMonodKinetic, CreateSimpleInhibition, create_e_perturbations
 
-def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, directory ):
+def write_biocell_header( diffusibles, celltypes, myreactions, myforces, eperturbations, mydomain, mygridsolver, mysimulator, directory ):
 
  num_celltypes  = len( celltypes )
+
+ #mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_X,dir[0]*mag);
+ #mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_Y,dir[1]*mag);
+ #mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_Z,dir[2]*mag);
 
  # write the files for biocellion
  header = open(directory+"/model_define.h", 'w')
@@ -13,12 +18,36 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
  header.write('#define __MY_DEFINE_H__' +"\n\n")
  header.write('#include "biocellion.h"'+"\n\n")
  header.write('#define NUM_JUNCTION_END_TYPES 1 /* we consider only one junction end type */ '+"\n")
- header.write('#define IF_GRID_SPACING_SEL ' )
- header.write( str(mydomain['resolution']) + "\n")
  header.write('#define SYSTEM_DIMENSION ')
  header.write( str(mydomain['nDim']) + "\n\n")
+# header.write("const REAL MY_PI = 3.14159265358979323846;\n\n")
 
- header.write("typedef enum _agent_type_e {  \n"  )
+ # write functions used by biocellion model
+ if ( mydomain['nDim']  == 2  ):
+    header.write("inline REAL radius_from_volume( REAL volume ) {\n")
+    header.write("\treturn SQRT( volume/( MY_PI*" + str(mydomain['resolution_agent']) +" )); \n")
+    header.write("}\n")
+    header.write("inline REAL volume_agent(REAL radius){\n")
+    header.write("\treturn "+str(mydomain['resolution_agent'])+"*MY_PI*radius*radius; \n")
+    header.write("}\n")
+    header.write("inline REAL surface_agent(REAL radius){\n")
+    header.write("\treturn "+str(mydomain['resolution_agent'])+"*2*MY_PI*radius; \n")
+    header.write("}\n")
+ else :
+    header.write("inline REAL radius_from_volume( REAL volume ) {\n")
+    header.write("\treturn CBRT( volume * 3.0 / ( 4.0 * MY_PI ) );\n")
+    header.write("}\n\n")
+    header.write("inline REAL volume_agent(REAL radius){\n")
+    header.write("\treturn (4.0/3.0)*MY_PI*radius*radius*radius; \n")
+    header.write("}\n")
+    header.write("inline REAL surface_agent(REAL radius){\n")
+    header.write("\treturn 4.0*MY_PI*radius*radius; \n")
+    header.write("}\n")
+ header.write("inline REAL MonodEquation(  REAL Kc , REAL u ) {\n")
+ header.write("\treturn  u / ( Kc + u ) ;\n")
+ header.write("}\n\n")
+
+ header.write("typedef enum _agent_type_e {   \n")
  for cell in celltypes:
     header.write("\tAGENT_TYPE_" + cell + ",\n")
  header.write("\tNUM_AGENT_TYPES \n"  )
@@ -36,17 +65,26 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
  header.write("} alive_cell_model_real_e;\n\n")
 
  for cell in celltypes:
-    if ( len( celltypes[cell]['molecules'] ) ) > 0 :
-       header.write("typedef enum _ode_net_"+ cell +"_var_e {   \n")
-       for mol in celltypes[cell]['molecules']: 
-          header.write("\tODE_NET_VAR_"+cell+"_"+mol+",\n")
-       header.write("\tNUM_ODE_NET_VAR_"+ cell +"\n")
-       header.write("} ode_net_"+cell+"_var_e;\n\n")
+     header.write("typedef enum _ode_net_"+ cell +"_var_e {   \n")
+     for mol in celltypes[cell]['molecules']: 
+        header.write("\tODE_NET_VAR_"+cell+"_"+mol+",\n")
+     header.write("\tNUM_ODE_NET_VAR_"+ cell +"\n")
+     header.write("} ode_net_"+cell+"_var_e;\n\n")
 
  header.write("typedef enum _alive_cell_model_int_e { \n")
  header.write("\tCELL_MODEL_INT_BOND_B, \n")
  header.write("\tNUM_MODEL_INTS \n")
  header.write("} alive_cell_model_int_e;\n\n")
+
+
+ ## 
+ header.write("typedef enum _cell_mech_real_e { \n" ) 
+ header.write("\tCELL_MECH_REAL_FORCE_X,\n" ) 
+ header.write("\tCELL_MECH_REAL_FORCE_Y,\n" ) 
+ header.write("\tCELL_MECH_REAL_FORCE_Z,\n" ) 
+ header.write("\tNUM_CELL_MECH_REALS\n" ) 
+ header.write("} cell_mech_real_e;\n\n" ) 
+ ##
 
  header.write("typedef enum _diffusible_elem_e {\n")
  for solute in diffusibles:
@@ -74,6 +112,7 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
  header.write("typedef enum _model_rng_type_e {\n")
  header.write("\tMODEL_RNG_UNIFORM,\n")
  header.write("\tMODEL_RNG_UNIFORM_10PERCENT,\n")
+ header.write("\tMODEL_RNG_GAUSSIAN,\n")
  header.write("\tNUM_MODEL_RNGS\n")
  header.write("} model_rng_type_e;\n\n")
 
@@ -87,24 +126,41 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
  header.write("\tS32  IdxIniCellData;\n")
  header.write("};\n\n")
 
+ header.write("struct ExtConditions {\n")
+ header.write("\tREAL xo;\n")
+ header.write("\tREAL xf;\n")
+ header.write("\tREAL yo;\n")
+ header.write("\tREAL yf;\n")
+ header.write("\tREAL zo;\n")
+ header.write("\tREAL zf;\n")
+ header.write("\tS32 TimeStep;\n")
+ header.write("\tS32 AgentType;\n")
+ header.write("\tS32 Var_Index;\n")
+ header.write("\tREAL Var_Value;\n")
+ header.write("\tS32 ODE_Index;\n")
+ header.write("\tREAL ODE_Value;\n")
+ header.write("};\n\n")
+
  header.write("class UBInitData {\n")
  header.write("public:\n")
  header.write("\tS32 numCells ;  \n")
- header.write("\tREAL x_offset; \n")
- header.write("\tREAL y_offset; \n")
- header.write("\tREAL z_offset; \n")
- header.write("\tS32 a_type; \n")
- header.write("\tREAL biomass; \n")
- header.write("\tREAL inert; \n")
  header.write("\tS32  IdxIniCellData;\n")
  header.write("};\n\n")
 
  header.write("extern S32  INI_N_CELLS;\n\n")
 
- header.write("const REAL MY_PI = 3.14159265358979323846;\n\n")
 
  header.write("const REAL IF_GRID_SPACING = ")
  header.write( str(mydomain['resolution']) + ";\n\n")
+
+ header.write("const S32 NUM_AGENT_OUTPUTS = ")
+ MolOutput_array = [];
+ for cell in celltypes :
+    for mol in celltypes[cell]['moloutput']: 
+       if mol in MolOutput_array : continue
+       else:  MolOutput_array.append( mol  ) 
+ header.write( str(3+ len(MolOutput_array)) + ";\n\n")
+ 
 
  header.write("const S32 A_NUM_AMR_LEVELS[NUM_DIFFUSIBLE_ELEMS]={") 
  comma = "" 
@@ -113,61 +169,73 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
     comma = ", "
  header.write("};\n\n")   
 
+ header.write("const BOOL A_AGENT_BORDER_DISAPPEAR[3]={")
+ if ( mygridsolver['dbtype_x'] == 'DISAPPEAR' ) :  header.write("true" )
+ else: header.write("false" )
+ if ( mygridsolver['dbtype_y'] == 'DISAPPEAR' ) :  header.write(",true" )
+ else: header.write(",false" )
+ if ( mygridsolver['dbtype_z'] == 'DISAPPEAR' ) :  header.write(",true" )
+ else: header.write(",false" )
+ header.write("};\n\n")
+
+
  header.write("const S32 AGAR_HEIGHT = ") 
  header.write( str(mydomain['agar_heigth'])+";\n" ) 
- header.write("const S32 AGAR_TOP_BUFFER_HEIGHT = 4;\n");
+ header.write("const S32 AGAR_TOP_BUFFER_HEIGHT = 0;\n\n");
 
- header.write("const REAL A_INIT_CONCENTRATION[NUM_DIFFUSIBLE_ELEMS]={")
+ header.write("const REAL A_INIT_AGAR_CONCENTRATION[NUM_DIFFUSIBLE_ELEMS]={")
  comma = "" 
  for sol in diffusibles:
      header.write(comma +str(diffusibles[sol]['ini_con_agar']))
      comma = ", "
      #header.write(","+str(sol['ini_con_agar'])   )
- header.write("};\n\n")
+ header.write("};\n")
+
+ header.write("const REAL A_INIT_IF_CONCENTRATION[NUM_DIFFUSIBLE_ELEMS]={")
+ comma = ""
+ for sol in diffusibles:
+     header.write(comma + '0.0')
+     comma = ", "
+     #header.write(","+str(sol['ini_con_agar'])   )
+ header.write("};\n")
 
  header.write("const REAL A_DIFFUSION_COEFF_AGAR[NUM_DIFFUSIBLE_ELEMS]={")
  comma = "" ; # looks horrrible
  for sol in diffusibles:
-    diff =diffusibles[sol]['Dcoef_agar']*mydomain['biofilmDiffusivity'] * 0.5 
+    diff =diffusibles[sol]['Dcoef_agar'] 
     header.write(comma +str(diff))
     comma = ", "
- header.write("};\n\n")
+ header.write("};\n")
 
  header.write("const REAL A_DIFFUSION_COEFF_COLONY[NUM_DIFFUSIBLE_ELEMS]={")
  cont = 0 ; # looks horrrible
  for sol in diffusibles:
-    diff =diffusibles[sol]['Dcoef_cd']*mydomain['biofilmDiffusivity']
+    diff =diffusibles[sol]['Dcoef_cd'] * mydomain['biofilmDiffusivity']
     if ( cont == 0 ) :
        header.write(str(diff))
        cont = 1
     else :
        header.write(", "+ str(diff))
+ header.write("};\n")
+
+ header.write("const BOOL A_DIFFUSION_COLONY_ONLY[NUM_DIFFUSIBLE_ELEMS]={")
+ cont = 0 ; # looks horrrible
+ for sol in diffusibles:
+    flag = 'false'
+    if ( diffusibles[sol]['colonyonly'] ):
+        flag= "true"
+    if ( cont == 0 ) :
+       header.write( flag  )
+       cont = 1
+    else :
+       header.write(", "+ flag  )
  header.write("};\n\n")
 
-
- # this will be dirty code
- header.write("const REAL AA_SECRETION_RATE_PER_CELL[NUM_AGENT_TYPES][NUM_DIFFUSIBLE_ELEMS]={") 
- coma = "" 
- for cell in celltypes: 
-    header.write(coma + "{")
-    coma = ""
-    for sol in diffusibles:
-       header.write(coma + "0.0 ")
-       coma = ","
-    header.write("} ")
-    coma = ","
- header.write("};\n") 
-
- header.write("const REAL AA_UPTAKE_RATE_PER_CELL[NUM_AGENT_TYPES][NUM_DIFFUSIBLE_ELEMS]={")
- coma="" 
+ header.write("const REAL A_NUM_ODE_NET_VAR[NUM_AGENT_TYPES]={")
+ comma = ""
  for cell in celltypes:
-    header.write(coma + "{")
-    coma = ""
-    for sol in diffusibles:
-       header.write(coma + "0.0 ")
-       coma = ","
-    header.write("} ")
-    coma = ","
+     header.write( comma+ "NUM_ODE_NET_VAR_" +  cell )
+     comma = ", "
  header.write("};\n")
  
  header.write("const REAL A_DENSITY_BIOMASS[NUM_AGENT_TYPES]={")
@@ -188,7 +256,6 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
      comma = ", "
  header.write("};\n\n")
 
-
  header.write("const REAL A_DENSITY_INERT[NUM_AGENT_TYPES]={")
  comma = "" 
  for cell in celltypes:
@@ -196,29 +263,53 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
      comma = ", "
  header.write("};\n\n")
  
- header.write("const REAL A_BIOMASS_DEGRADATION[NUM_AGENT_TYPES]={")
+ header.write("const REAL A_DIVISION_RADIUS[NUM_AGENT_TYPES]={")
  comma = ""
  for cell in celltypes:
-     header.write( comma +  "0.0"  )
+     header.write(comma + str(celltypes[cell]['divRadius']))
+     comma = ","
+ header.write("};\n")
+ 
+ header.write("const REAL A_MAX_CELL_RADIUS[NUM_AGENT_TYPES]={")
+ comma =""
+ for cell in celltypes:
+     header.write(comma + str(1.1*celltypes[cell]['divRadius'] )) 
+     comma = ","
+ header.write("};\n")
+ 
+ header.write("const REAL A_MIN_CELL_RADIUS[NUM_AGENT_TYPES]={")
+ comma =""
+ for cell in celltypes:
+     header.write(comma + str(celltypes[cell]['deathRadius']))
      comma = ", "
+ header.write("};\n")
+
+ header.write("const REAL A_MAX_CELL_VOL[NUM_AGENT_TYPES]={")
+ comma = "" 
+ for cell in celltypes:
+    rad = 1.1*celltypes[cell]['divRadius']
+    if mydomain['nDim']  == 2 : 
+       header.write(comma+str(math.pi*rad*rad*mydomain['resolution_agent']))
+    else : header.write(comma+str(4.0*math.pi*rad*rad*rad/3.0 ))
+    comma= ", "
+ header.write("};\n")
+ 
+ header.write("const REAL A_MIN_CELL_VOL[NUM_AGENT_TYPES]={")
+ comma = ""
+ for cell in celltypes:
+    rad = 1.1*celltypes[cell]['deathRadius']
+    if mydomain['nDim']  == 2 :
+       header.write(comma+str(math.pi*rad*rad*mydomain['resolution_agent']))
+    else : header.write(comma+str(4.0*math.pi*rad*rad*rad/3.0 ))
+    comma= ", "
  header.write("};\n\n")
 
- header.write("const REAL DIVISION_RADIUS = ")
- cell =  celltypes.keys()[0]
- header.write( str(celltypes[cell]['divRadius'])+ ";\n")
- header.write("const REAL MAX_CELL_RADIUS = DIVISION_RADIUS * 1.1;\n")
-
- header.write("const REAL MIN_CELL_RADIUS = ")
- cell =  celltypes.keys()[0]
- header.write( str(celltypes[cell][ 'deathRadius'  ])+ ";\n")
-
- if ( celltypes[cell]['shape'] == 'cylinder' ):
-    header.write("const REAL MAX_CELL_VOL = (  MY_PI ) * MAX_CELL_RADIUS * MAX_CELL_RADIUS * IF_GRID_SPACING   ;\n")
-    header.write("const REAL MIN_CELL_VOL = (  MY_PI ) * MIN_CELL_RADIUS * MIN_CELL_RADIUS * IF_GRID_SPACING ;\n\n")
- else:
-    header.write("const REAL MAX_CELL_VOL = (  MY_PI ) * MAX_CELL_RADIUS * MAX_CELL_RADIUS * MAX_CELL_RADIUS ;\n")
-    header.write("const REAL MIN_CELL_VOL = (  MY_PI ) * MIN_CELL_RADIUS * MIN_CELL_RADIUS * MIN_CELL_RADIUS ;\n\n")
-
+ header.write("const REAL A_DIFFUSION_COEFF_CELLS[NUM_AGENT_TYPES]={")
+ comma =""
+ for cell in celltypes:
+     header.write(comma + str(celltypes[cell]['Dcoef'] ))
+     comma = ","
+ header.write("};\n")
 
  # here is the link between the agents and \
  header.write("const REAL A_AGENT_ADHESION_S[NUM_AGENT_TYPES][NUM_AGENT_TYPES]={")
@@ -346,47 +437,65 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, mydomai
     header.write(comma + "4 "  )
     comma = ", "
  header.write("};\n\n") 
+
+ # ODE variables that will printed in VTK file
+ header.write("const S32 AA_INDEX_ODE_OUTPUT[NUM_AGENT_TYPES][NUM_AGENT_OUTPUTS -3]={")
+ comma = ""
+ for cell in celltypes:
+    header.write( comma + "{" )
+    comma = ""
+    for mol in MolOutput_array:
+       if mol in celltypes[cell]['moloutput'] :
+          header.write( comma + 'ODE_NET_VAR_'+cell+'_'+mol) 
+       else: 
+          header.write( comma + '-1' )
+       comma = ", "
+    header.write("}")
+    comma = ","
+ header.write("};\n\n") 
+
+ # EXTERNAL PERTURBATION 
+ NumEpertur = 0
+ for epert in eperturbations:
+    NumEpertur = NumEpertur + 1 
+ header.write("const S32 NUM_E_PERTURBATIONS="+str(NumEpertur)+";\n")
  
- if ( celltypes[cell]['shape'] == 'cylinder' ):
-    header.write("inline REAL radius_from_volume( REAL volume ) {\n")  
-    header.write("\treturn SQRT( volume/( MY_PI*IF_GRID_SPACING )); \n")
-    header.write("}\n\n")
- else :
-    header.write("inline REAL radius_from_volume( REAL volume ) {\n")
-    header.write("\treturn CBRT( volume * 3.0 / ( 4.0 * MY_PI ) );\n")
-    header.write("}\n\n")    
+ header.write("const ExtConditions A_E_PERTURBATIONS[NUM_E_PERTURBATIONS]={\n")
+ comma = ""
+ for name in eperturbations:
 
- header.write("inline REAL MonodEquation(  REAL Kc , REAL u ) {\n")
- header.write("\treturn  u / ( Kc + u ) ;\n")
- header.write("}\n\n") 
- # Write the biomas rate equation, it depends of cell type
- #header.write("inline REAL BiomasRate(S32 type, REAL Biomass, REAL uscale, REAL uptake) {\n")  
- #header.write("switch (type)  {\n")
- #for cell in celltypes: 
- #   header.write("case "+ str( celltypes[cell]['id'] ) + ":\n" )
-    
- #   name = ""
- #   for reaction_name in celltypes[cell]['reactions']:
- #       if ( myreactions[reaction_name]['yields'] == "biomass" ):
- #            name = reaction_name   
- #   if ( name == "") :
- #      header.write("\treturn 0.0; \n")
- #   else :
- #      if ( len( myreactions[name]['MonodKinetic'] ) > 0 ):
- #         header.write("\treturn " + str(myreactions[name]['muMax']) )
- #         for reaction_i in myreactions[name]['MonodKinetic'] :
- #            if ( reaction_i['Ks'] != 0.0 ) :   
- #               header.write("* ( uscale/("+str(reaction_i['Ks'])+" +uscale))")
- #         header.write("  * Biomass * uptake ; \n")
- #      else :       
- #           header.write("\treturn " + str(myreactions[name]['muMax']) + "; \n")
+       agent=eperturbations[name]['AgentType']
+       
+       header.write(comma + "{" )    
+       header.write(str(eperturbations[name]['xo'])+",")
+       header.write(str(eperturbations[name]['xf'])+",")
+       header.write(str(eperturbations[name]['yo'])+",")
+       header.write(str(eperturbations[name]['yf'])+",")
+       header.write(str(eperturbations[name]['zo'])+",")
+       header.write(str(eperturbations[name]['zf'])+",")
+       header.write(str(eperturbations[name]['TimeStep'])+",")
+       if ( agent == "" ): header.write("-1,")
+       else: header.write("AGENT_TYPE_"+agent+",")
 
- #   header.write("\tbreak;\n" ) 
+       if ( eperturbations[name]['variable'] == "biomass" ): 
+          header.write("CELL_MODEL_REAL_BIOMAS,")
+       elif  ( eperturbations[name]['variable'] == "inert" ):
+          header.write("CELL_MODEL_REAL_INERT,")
+       else:
+          header.write("-1,")
+       header.write(str(eperturbations[name]['variable_val'])+",")
 
- #header.write("default :\n")
- #header.write("\treturn 0.0; \n")
- #header.write("\tbreak; \n")
- #header.write("};\n\n")
- #header.write("}\n")
-
+       if ( eperturbations[name]['molecule'] == ""):
+          header.write("-1,")
+       else:
+          if ( agent == "" ):
+             header.write("-1,")
+          else:
+             header.write("ODE_NET_VAR_"+agent+"_"+str(eperturbations[name]['molecule'])+",")
+       header.write(str(eperturbations[name]['molecule_val'])+"}\n")
+       
+       comma = ","
+        
+ header.write("};\n\n") 
+       
  header.write("#endif\n")

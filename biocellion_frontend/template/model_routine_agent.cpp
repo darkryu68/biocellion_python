@@ -30,7 +30,6 @@ void ModelRoutine::addSpAgents( const BOOL init, const VIdx& startVIdx, const VI
        CHECK( v_globalData.size() == ( ifRegionSize[0]*ifRegionSize[1]*ifRegionSize[2]*sizeof( UBInitData )) + INI_N_CELLS*sizeof(IniCellData));
 
        //  Reading the address where data is located.
-       //p_ubInitData = ( const UBInitData* )&( v_globalData[3*sizeof(S32) + 3*sizeof(REAL)] );
        p_ubInitData = ( const UBInitData* )&( v_globalData[0] );
        p_IniCellData = ( const IniCellData* )&( v_globalData[ ifRegionSize[0]*ifRegionSize[1]*ifRegionSize[2]*sizeof(UBInitData)] );
 
@@ -59,24 +58,26 @@ void ModelRoutine::addSpAgents( const BOOL init, const VIdx& startVIdx, const VI
                       
                          SpAgentState state;
                          VReal posOffset;
-                         CHECK( MAX_CELL_RADIUS >= MIN_CELL_RADIUS );
+                         S32 atype ;
+                         //CHECK( MAX_CELL_RADIUS >= MIN_CELL_RADIUS );
 
                          posOffset[0] = cellInitData.x_offset ;
                          posOffset[1] = cellInitData.y_offset ;
                          posOffset[2] = cellInitData.z_offset ;
+                         atype  = cellInitData.a_type;
 
-                         state.setType( cellInitData.a_type );
+                         state.setType( atype );
                          REAL biomass  = cellInitData.biomass ; 
                          REAL inert =  cellInitData.inert ;
                          REAL total_biomass = biomass + inert;  
                   
-		         REAL volume = total_biomass / A_DENSITY_BIOMASS[ubInitData.a_type]; 
+		         REAL volume = total_biomass / A_DENSITY_BIOMASS[atype]; 
                          REAL radius = radius_from_volume( volume ); 
    
-                         if ( radius >  MAX_CELL_RADIUS  )
-                             radius = MAX_CELL_RADIUS;
-                         else if ( radius < MIN_CELL_RADIUS )
-                             radius = MIN_CELL_RADIUS;
+                         if ( radius >  A_MAX_CELL_RADIUS[atype]  )
+                             radius = A_MAX_CELL_RADIUS[atype];
+                         else if ( radius < A_MIN_CELL_RADIUS[atype] )
+                             radius = A_MIN_CELL_RADIUS[atype];
                        
                          state.setRadius( radius );
                          state.setModelReal( CELL_MODEL_REAL_BIOMAS, biomass );
@@ -85,15 +86,13 @@ void ModelRoutine::addSpAgents( const BOOL init, const VIdx& startVIdx, const VI
                          state.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, 1.0 );
                          state.setModelInt( CELL_MODEL_INT_BOND_B, 0 ) ;
    
-                         Vector<REAL> v_odeNetVal; 
-                         v_odeNetVal = state.getODEValArray( 0 );
-                         if ( v_odeNetVal.size() > 0 ) {
-                            for( S32 i = 0 ; i < ( S32 )v_odeNetVal.size() ; i++ ) {
-                                v_odeNetVal[i] = 0.0;
+                         if (  A_NUM_ODE_NET_VAR[atype] > 0 ) {
+                            for( S32 i = 0 ; i < A_NUM_ODE_NET_VAR[atype]   ; i++ ) {
+                               state.setODEVal(0,i,0.0);
                             }
-                            if ( A_BIOMASS_ODE_INDEX[ cellInitData.a_type ] != -1 ) {
-                               S32 ode_idx = A_BIOMASS_ODE_INDEX[cellInitData.a_type ] ;
-                               v_odeNetVal[ode_idx] = biomass;
+                            if ( A_BIOMASS_ODE_INDEX[ atype ] != -1 ) {
+                               S32 ode_idx = A_BIOMASS_ODE_INDEX[atype ] ;
+                               state.setODEVal(0,ode_idx,biomass);
                             }  
                          }
 
@@ -118,7 +117,7 @@ void ModelRoutine::addSpAgents( const BOOL init, const VIdx& startVIdx, const VI
 }
 
 
-void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo& junctionInfo, const VReal& vOffset, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox/* [elemIdx] */, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox/* [elemIdx] */, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox/* [elemIdx] */, SpAgentState& state/* INOUT */ ) {
+void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const JunctionData& junctionData, const VReal& vOffset, const NbrUBEnv& nbrUBEnv, SpAgentState& state/* INOUT */ ) {
     /* MODEL START */
 
     REAL aaa_ratio[3][3][3];
@@ -127,11 +126,7 @@ void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo
 
     REAL uptakePct = state.getModelReal( CELL_MODEL_REAL_UPTAKE_PCT );
     REAL secretionPct = state.getModelReal( CELL_MODEL_REAL_SECRETION_PCT );
-
-
-
     S32 type = state.getType() ; // id of cell type 
-    //S32 pdeIdx  = A_AGENT_GROWTH_SOURCE[type] ;//index of the sol needed to update biomass
 
     /// this part can be encapsulated in another function
     if( uptakePct > 0.0 ) {/* live */
@@ -140,42 +135,39 @@ void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo
           a_avg_diff[ i  ] = 0.0;    
 
        if ( NUM_DIFFUSIBLE_ELEMS > 0 ) {
-
           for( S32 i = -1 ; i <= 1 ; i++ ) {
              for( S32 j = -1 ; j <= 1 ; j++ ) {
                 for( S32 k = -1 ; k <= 1 ; k++ ) {
                    if( aaa_ratio[i + 1][j+1][k + 1] > 0.0 ) {
                       CHECK( ( idx_t )( vIdx[0] + i ) < Info::getDomainSize( 0 ) );
                       for (S32 dIndx =0 ; dIndx < NUM_DIFFUSIBLE_ELEMS; dIndx++ ) { 
-                           a_avg_diff[ dIndx  ]  += v_gridPhiNbrBox[ dIndx  ].getVal( i, j, k ) * aaa_ratio[i + 1][j+1][k + 1];
+                           a_avg_diff[ dIndx  ]  += nbrUBEnv.getPhi(i,j,k,dIndx)*aaa_ratio[i+1][j+1][k+1];
                       }        
                    }
                 }
              }
           }
+          for ( S32 i = 1; i <= NUM_DIFFUSIBLE_ELEMS ; i++ )
+             state.setModelReal( CELL_NUM_MODEL_REALS - i, a_avg_diff[NUM_DIFFUSIBLE_ELEMS-i]) ;
        }
-         //cout << "VIdx:"<<vIdx[0] << "," << vIdx<<[1]<<","<<vIDx[0]
-
-         //cout<<"phi " <<  v_gridPhiNbrBox[0].getVal(0,0,0) << " phi -z:" <<v_gridPhiNbrBox[0].getVal(0,0,1)<< " phi +z:" <<v_gridPhiNbrBox[0].getVal(0,1,+1) << " phi -x-y:" << v_gridPhiNbrBox[0].getVal(-1,-1,0) <<" phi -x:" << v_gridPhiNbrBox[0].getVal(-1,0,0) << " phi -x+y:" << v_gridPhiNbrBox[0].getVal(-1,1,0)   <<endl;
-         
-       //REAL dt = BASELINE_TIME_STEP_DURATION/NUM_STATE_AND_GRID_TIME_STEPS_PER_BASELINE;
-       REAL Biomas = state.getModelReal(CELL_MODEL_REAL_BIOMAS );
-       REAL Inert = state.getModelReal(CELL_MODEL_REAL_INERT ); 
+       
+     
+       REAL Biomas = state.getModelReal(CELL_MODEL_REAL_BIOMAS);
+       REAL Inert = state.getModelReal(CELL_MODEL_REAL_INERT); 
 
        if ( A_BIOMASS_ODE_INDEX[ type ] != -1 ) {
           S32 ode_idx = A_BIOMASS_ODE_INDEX[ type ] ; 
-          Biomas = state.getODEVal( 0 ,  ode_idx  );  
+          Biomas = state.getODEVal( 0, ode_idx);  
        }
        
-       REAL cellVol = ( Biomas + Inert ) / A_DENSITY_BIOMASS[ type ] ;
+       REAL cellVol = (Biomas + Inert)/A_DENSITY_BIOMASS[type];
 
-       if ( cellVol > MAX_CELL_VOL ) {
-          cellVol = MAX_CELL_VOL ;
-          Biomas = cellVol * A_DENSITY_BIOMASS[ type ]  - Inert ;
+       if ( cellVol > A_MAX_CELL_VOL[type] ) {
+          cellVol = A_MAX_CELL_VOL[type] ;
+          Biomas = cellVol * A_DENSITY_BIOMASS[type]  - Inert ;
        } 
        CHECK( cellVol >= 0.0 );
        REAL newRadius = radius_from_volume( cellVol );     
-         //cout<<"biomas:"<<Biomas<<" rad:"<<newRadius<<  " uscale:"<<uScale<<" dt: " << dt <<    endl;
           
        state.setRadius( newRadius );
        state.setModelReal( CELL_MODEL_REAL_BIOMAS, Biomas );
@@ -198,11 +190,10 @@ void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo
           state.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, secretionPct );
        }
 
-         // check if bnd should be gnerated 
- 
+       // check if bnd should be gnerated 
        if ( A_AGENT_BOND_BOUNDARY_S[type] > 0.0 ) {
           REAL R0 =A_AGENT_SHOVING_SCALE[type]*state.getRadius();
-          REAL x=((REAL)vIdx[0] +0.5+vOffset[0])*IF_GRID_SPACING;
+          REAL x=((REAL)vIdx[0] +0.5)*IF_GRID_SPACING + vOffset[0];
           REAL dist_b = FABS(x - AGAR_HEIGHT*IF_GRID_SPACING);
           if (state.getModelInt(CELL_MODEL_INT_BOND_B)==0){
              if (dist_b < R0*A_AGENT_BOND_BOUNDARY_CREATE[type]){
@@ -224,7 +215,7 @@ void ModelRoutine::updateSpAgentState( const VIdx& vIdx, const AgentJunctionInfo
     return;
 }
 
-void ModelRoutine::spAgentSecretionBySpAgent( const VIdx& vIdx, const AgentJunctionInfo& junctionInfo, const VReal& vOffset, const AgentMechIntrctData& mechIntrctData, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox/* [elemIdx] */, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox/* [elemIdx] */, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox/* [elemIdx] */, SpAgentState& state/* INOUT */, Vector<SpAgentState>& v_spAgentState, Vector<VReal>& v_spAgentDisp ) {
+void ModelRoutine::spAgentSecretionBySpAgent( const VIdx& vIdx, const JunctionData& junctionData, const VReal& vOffset, const MechIntrctData& mechIntrctData, const NbrUBEnv& nbrUBEnv, SpAgentState& state/* INOUT */, Vector<SpAgentState>& v_spAgentState, Vector<VReal>& v_spAgentDisp ) {
 	/* MODEL START */
 
 	/* nothing to do */
@@ -234,45 +225,57 @@ void ModelRoutine::spAgentSecretionBySpAgent( const VIdx& vIdx, const AgentJunct
 	return;
 }
 
-void ModelRoutine::updateSpAgentBirthDeath( const VIdx& vIdx, const SpAgent& spAgent, const AgentMechIntrctData& mechIntrctData, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox/* [elemIdx] */, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox/* [elemIdx] */, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox/* [elemIdx] */, BOOL& divide, BOOL& disappear ) {
+void ModelRoutine::updateSpAgentBirthDeath( const VIdx& vIdx, const SpAgent& spAgent, const MechIntrctData& mechIntrctData, const NbrUBEnv& nbrUBEnv, BOOL& divide, BOOL& disappear ) {
     /* MODEL START */
 
     divide = false;
     disappear = false;
 
-    //if ( (Info::getCurBaselineTimeStep() % 20)  == 0 ){ 
+    S32 type = spAgent.state.getType() ;
 
-       REAL rnd_num = Util::getModelRand(MODEL_RNG_UNIFORM_10PERCENT); //0.9-1.1
-       REAL testrad = DIVISION_RADIUS * rnd_num;
+    REAL rnd_num = Util::getModelRand(MODEL_RNG_UNIFORM_10PERCENT); //0.9-1.1
+    REAL testrad = A_DIVISION_RADIUS[type] * rnd_num;
      
-
-       if( ( spAgent.state.getModelReal( CELL_MODEL_REAL_UPTAKE_PCT ) > 0.0 )/* live cells */   ) { 
-           if( spAgent.state.getRadius() >= testrad ) { 
-              divide = true;
-           }
-           else if ( spAgent.state.getRadius() <= MIN_CELL_RADIUS ) {
-              disappear = true;
-           }
-       }
-    //}
+    if ((spAgent.state.getModelReal(CELL_MODEL_REAL_UPTAKE_PCT)>0.0)/* live cells */   ) { 
+        if( spAgent.state.getRadius() >= testrad ) { 
+            divide = true;
+        }
+        else if ( spAgent.state.getRadius() <= A_MIN_CELL_RADIUS[type] ) {
+            disappear = true;
+        }
+    }
+    
+    // Remove cells when the touch the Borders
+    if ( A_AGENT_BORDER_DISAPPEAR[0] ){
+        if ((vIdx[0] == AGAR_HEIGHT) || (vIdx[0] == Info::getDomainSize(0)-1))
+            disappear = true ;
+    }
+    if ( A_AGENT_BORDER_DISAPPEAR[1] ){
+        if ((vIdx[1] == 0) || (vIdx[1] == Info::getDomainSize(1)-1))
+            disappear = true ;
+    }
+    if ( A_AGENT_BORDER_DISAPPEAR[2] ){
+        if ((vIdx[2] == 0) || (vIdx[2] == Info::getDomainSize(2)-1))
+            disappear = true ;
+    }
 
     /* MODEL END */
 
     return;
 }
 
-void ModelRoutine::adjustSpAgent( const VIdx& vIdx, const AgentJunctionInfo& junctionInfo, const VReal& vOffset, const AgentMechIntrctData& mechIntrctData, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox/* [elemIdx] */, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox/* [elemIdx] */, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox/* [elemIdx] */, SpAgentState& state/* INOUT */, VReal& disp ) {
-	/* MODEL START */
+void ModelRoutine::adjustSpAgent( const VIdx& vIdx, const JunctionData& junctionData, const VReal& vOffset, const MechIntrctData& mechIntrctData, const NbrUBEnv& nbrUBEnv, SpAgentState& state/* INOUT */, VReal& disp ) {
+    /* MODEL START */
 
-    disp = mechIntrctData.force;
-
-    //cout<<"dist: " <<SQRT(disp[0]*disp[0]+disp[1]*disp[1]+disp[2]*disp[2])<<endl;
+    disp[0] = mechIntrctData.getModelReal( CELL_MECH_REAL_FORCE_X );
+    disp[1] = mechIntrctData.getModelReal( CELL_MECH_REAL_FORCE_Y );
+    disp[2] = mechIntrctData.getModelReal( CELL_MECH_REAL_FORCE_Z );
+    S32 type = state.getType(); 
 
     // Force due to Bond with agar
     if (state.getModelInt(CELL_MODEL_INT_BOND_B) == 1) {
-        REAL x = ((REAL)vIdx[0] + 0.5 + vOffset[0] )*IF_GRID_SPACING;
+        REAL x=((REAL)vIdx[0]+0.5)*IF_GRID_SPACING + vOffset[0];
         REAL dist_b = FABS(x -  AGAR_HEIGHT * IF_GRID_SPACING);
-        S32 type = state.getType(); 
         REAL xij = A_AGENT_SHOVING_SCALE[type]*state.getRadius() - dist_b;
 #if REAL_IS_FLOAT
         disp[0] +=  xij * tanhf( FABS(xij) * A_AGENT_BOND_BOUNDARY_S[type] );
@@ -281,24 +284,57 @@ void ModelRoutine::adjustSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
 #endif
 
     }   
-    
  
+    // Random movement (Brownian)
+    if ( A_DIFFUSION_COEFF_CELLS[type] > 0.0 ){
+        REAL F_prw = SQRT( 2*A_DIFFUSION_COEFF_CELLS[type] * BASELINE_TIME_STEP_DURATION );
+        for( S32 dim = 0 ; dim < SYSTEM_DIMENSION ; dim++ ) 
+           disp[dim]+= F_prw* Util::getModelRand(MODEL_RNG_GAUSSIAN);
+    }
+
+    // limiting the displacement 
     for( S32 dim = 0 ; dim < SYSTEM_DIMENSION; dim++ ) {/* limit the maximum displacement within a single time step */
-        if( disp[dim] > MAX_CELL_RADIUS ) {
-            disp[dim] = MAX_CELL_RADIUS ;
+        if( disp[dim] > A_MAX_CELL_RADIUS[type] ) {
+            disp[dim] = A_MAX_CELL_RADIUS[type] ;
         }
-	else if( disp[dim] < ( MAX_CELL_RADIUS * -1.0 ) ) {
-             disp[dim] = MAX_CELL_RADIUS * -1.0 ;
+	else if( disp[dim] < ( A_MAX_CELL_RADIUS[type] * -1.0 ) ) {
+             disp[dim] = A_MAX_CELL_RADIUS[type] * -1.0 ;
         }
     }
 
-    //cout << "Radius " << state.getRadius() << endl;
-    //disp[2] = 0.0; // because cells move only in x-y (2D)
+    for( S32 epr = 0; epr < NUM_E_PERTURBATIONS; epr++) {
+      ExtConditions econd = A_E_PERTURBATIONS[epr];
+      if ( Info::getCurBaselineTimeStep() == econd.TimeStep){
+        if ( (econd.AgentType==-1) || ( econd.AgentType==type) ){
+           REAL xx = ( REAL(vIdx[0]) + 0.5 )* IF_GRID_SPACING + vOffset[0] ;
+           REAL yy = ( REAL(vIdx[1]) + 0.5 )* IF_GRID_SPACING + vOffset[1] ;
+           REAL zz = ( REAL(vIdx[2]) + 0.5 )* IF_GRID_SPACING + vOffset[2] ;
+           xx -= (REAL)(AGAR_HEIGHT*IF_GRID_SPACING);
+
+           BOOL inside = false ;
+           if ((xx > econd.xo )  && (xx < econd.xf)) {
+             if ((yy > econd.yo) && (yy < econd.yf)) {
+               if ( SYSTEM_DIMENSION == 2)
+                   inside = true;
+               else if ( (zz>econd.zo) && (zz<econd.zf) )
+                   inside = true;
+             }
+           }
+           if ( inside )  {
+              if ( econd.Var_Index != -1 )
+                 state.setModelReal( econd.Var_Index, econd.Var_Value ) ;
+              if ( (econd.ODE_Index != -1) && ( econd.AgentType == -1 ) )
+                 state.setODEVal(0, econd.ODE_Index, econd.ODE_Value ) ;
+           }
+        }
+      }
+    }
+
     /* MODEL END */
     return;
 }
 
-void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& junctionInfo, const VReal& vOffset, const AgentMechIntrctData& mechIntrctData, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox/* [elemIdx] */, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox/* [elemIdx] */, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox/* [elemIdx] */, SpAgentState& motherState/* INOUT */, VReal& motherDisp, SpAgentState& daughterState, VReal& daughterDisp, Vector<BOOL>& v_junctionDivide, BOOL& motherDaughterLinked, JunctionEnd& motherEnd, JunctionEnd& daughterEnd ) {
+void ModelRoutine::divideSpAgent( const VIdx& vIdx, const JunctionData& junctionData, const VReal& vOffset, const MechIntrctData& mechIntrctData, const NbrUBEnv& nbrUBEnv, SpAgentState& motherState/* INOUT */, VReal& motherDisp, SpAgentState& daughterState, VReal& daughterDisp, Vector<BOOL>& v_junctionDivide, BOOL& motherDaughterLinked, JunctionEnd& motherEnd, JunctionEnd& daughterEnd ) {
 	/* MODEL START */
 
     CHECK( ( motherState.getType() == AGENT_TYPE_MyGrowingYeast ) && ( motherState.getModelReal( CELL_MODEL_REAL_UPTAKE_PCT ) > 0.0 )/* live */  );
@@ -307,43 +343,46 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
     VReal dir;
     REAL scale;
     S32 type_id = motherState.getType(); 
-    REAL cellVol;
+    REAL OldVol, MotherVol, DougtherVol ; 
     REAL biomas, mother_biomas, dougther_biomas ;
     REAL inert, mother_inert, dougther_inert;
     REAL rnd_num1 = Util::getModelRand(MODEL_RNG_UNIFORM_10PERCENT);//0.9-1.1
 
-
-    motherDisp = mechIntrctData.force;
+    motherDisp[0] = mechIntrctData.getModelReal( CELL_MECH_REAL_FORCE_X );
+    motherDisp[1] = mechIntrctData.getModelReal( CELL_MECH_REAL_FORCE_Y );
+    motherDisp[2] = mechIntrctData.getModelReal( CELL_MECH_REAL_FORCE_Z );
 
     biomas = motherState.getModelReal( CELL_MODEL_REAL_BIOMAS );
     inert = motherState.getModelReal( CELL_MODEL_REAL_INERT );
+    OldVol = (biomas + inert)/A_DENSITY_BIOMASS[ type_id ];
+ 
     mother_biomas = 0.5 * biomas * rnd_num1 ;
     mother_inert = 0.5 * inert * rnd_num1 ;
 
-    cellVol = ( mother_biomas + mother_inert)  / A_DENSITY_BIOMASS[ type_id ]; 
-    if ( cellVol < MIN_CELL_VOL){
-       cellVol = MIN_CELL_VOL;
-       mother_biomas =  cellVol * A_DENSITY_BIOMASS[ type_id ]  -  mother_inert  ; 
+    MotherVol = ( mother_biomas + mother_inert)  / A_DENSITY_BIOMASS[ type_id ]; 
+    if ( MotherVol < A_MIN_CELL_VOL[type_id] ){
+       MotherVol = A_MIN_CELL_VOL[type_id];
+       mother_biomas = MotherVol*A_DENSITY_BIOMASS[type_id] - mother_inert; 
     }
 
-    radius = radius_from_volume( cellVol ); 
+    radius = radius_from_volume( MotherVol ); 
     //  set the model variable 
     motherState.setRadius( radius );
     motherState.setModelReal( CELL_MODEL_REAL_BIOMAS, mother_biomas  );
     motherState.setModelReal( CELL_MODEL_REAL_INERT, mother_inert  );
     motherState.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, 1.0 );
     motherState.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, 1.0 );
-
+    
     dougther_biomas = biomas - mother_biomas;
     dougther_inert = inert - mother_inert;
 
-    cellVol = ( dougther_biomas + dougther_inert) / A_DENSITY_BIOMASS[ type_id ];
-    if ( cellVol < MIN_CELL_VOL){
-       cellVol = MIN_CELL_VOL;
-       dougther_biomas =  cellVol * A_DENSITY_BIOMASS[ type_id ];
+    DougtherVol = (dougther_biomas + dougther_inert)/A_DENSITY_BIOMASS[type_id];
+    if ( DougtherVol < A_MIN_CELL_VOL[type_id] ){
+       DougtherVol = A_MIN_CELL_VOL[type_id] ;
+       dougther_biomas = DougtherVol*A_DENSITY_BIOMASS[type_id];
     }
 
-    radius = radius_from_volume( cellVol );    
+    radius = radius_from_volume( DougtherVol );    
     // set the model variable
     daughterState.setType( type_id );
     daughterState.setRadius( radius );
@@ -351,6 +390,15 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
     daughterState.setModelReal( CELL_MODEL_REAL_INERT, dougther_inert );
     daughterState.setModelReal( CELL_MODEL_REAL_UPTAKE_PCT, 1.0 );
     daughterState.setModelReal( CELL_MODEL_REAL_SECRETION_PCT, 1.0 );
+  
+    // Copy values of ODEs from mother to dauther
+    if ( A_NUM_ODE_NET_VAR[type_id] > 0 ) {
+       for( S32 i = 0; i<A_NUM_ODE_NET_VAR[type_id]; i++ ) {
+          REAL mol = motherState.getODEVal(0,i);          
+          motherState.setODEVal(0,i, mol*OldVol/MotherVol)  ;
+          daughterState.setODEVal(0,i, mol*OldVol/DougtherVol)  ;
+       }
+    }
 
     // change the new biomass on the  ODEs
     if ( A_BIOMASS_ODE_INDEX[ type_id ] != -1 ) {
@@ -359,10 +407,7 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
        daughterState.setODEVal(0, ode_idx, dougther_biomas);
     }
 
-    //dir[0] = 0.0;
-    //dir[1] = 0.0;
-
-    /* divide in a random direction */
+    // divide in a random direction
     dir = VReal::ZERO;
     do {
         scale = 0.0;
@@ -371,15 +416,13 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
             scale += dir[dim] * dir[dim];
         }
         scale = SQRT( scale );
-    } while( scale < REAL_MIN );
+    } while( scale > 0.5 );
 
     for( S32 dim = 0 ; dim < SYSTEM_DIMENSION ; dim++ ) {
         dir[dim] /= scale;
     }
 
     //////////////
-    //dir[2]=0; // Needs checking for 2D or 3D simulation 
-    //cout << "Displacement:" <<  dir[0] << "," << dir[1] << "," << dir[2] << endl;
   
     radius = 0.5* A_AGENT_SHOVING_SCALE[ type_id] *(daughterState.getRadius()+motherState.getRadius());
     motherDisp += dir * radius;
@@ -387,15 +430,15 @@ void ModelRoutine::divideSpAgent( const VIdx& vIdx, const AgentJunctionInfo& jun
 
 
     for( S32 dim = 0 ; dim < SYSTEM_DIMENSION ; dim++ ) {/* limit the maximum displacement  */
-        if( motherDisp[dim] > MAX_CELL_RADIUS ) 
-            motherDisp[dim] = MAX_CELL_RADIUS ;
-        else if( motherDisp[dim] < ( MAX_CELL_RADIUS * -1.0 ) ) 
-            motherDisp[dim] = MAX_CELL_RADIUS * -1.0;
+        if( motherDisp[dim] > A_MAX_CELL_RADIUS[type_id] ) 
+            motherDisp[dim] = A_MAX_CELL_RADIUS[type_id] ;
+        else if( motherDisp[dim] < ( A_MAX_CELL_RADIUS[type_id] * -1.0 ) ) 
+            motherDisp[dim] = A_MAX_CELL_RADIUS[type_id] * -1.0;
         
-        if( daughterDisp[dim] > MAX_CELL_RADIUS  ) 
-            daughterDisp[dim] = MAX_CELL_RADIUS ;
-        else if( daughterDisp[dim] < ( MAX_CELL_RADIUS  * -1.0 ) ) 
-            daughterDisp[dim] = MAX_CELL_RADIUS * -1.0;
+        if( daughterDisp[dim] > A_MAX_CELL_RADIUS[type_id]  ) 
+            daughterDisp[dim] = A_MAX_CELL_RADIUS[type_id] ;
+        else if( daughterDisp[dim] < ( A_MAX_CELL_RADIUS[type_id]  * -1.0 ) ) 
+            daughterDisp[dim] = A_MAX_CELL_RADIUS[type_id] * -1.0;
     }
 
     //daughterDisp[2] = 0; // Needs checking for 2D or 3D simulations
