@@ -44,16 +44,16 @@ void ModelRoutine::computeForceSpAgent( const VIdx& vIdx0, const SpAgent& spAgen
 
 	REAL R0 = A_AGENT_SHOVING_SCALE[type0]*spAgent0.state.getRadius() ;
         REAL R1 = A_AGENT_SHOVING_SCALE[type1]*spAgent1.state.getRadius();
-        REAL D = R0 + R1 ;
+        REAL D = R0 + R1 - 0.5*A_AGENT_SHOVING_LIMIT[type0] - 0.5*A_AGENT_SHOVING_LIMIT[type1] ;
 	REAL mag = 0.0;/* + for repulsive force, - for adhesive force */
-        REAL xij  = D - dist;
+        REAL xij  = D - dist  ;
 
         //if (  spAgent0.junctionInfo.getCurId() == 48  )  {
         //   cout<<dist<<" "<<spAgent1.junctionInfo.getCurId()<<" "<<R0<<" "<<R1<<endl;
         //} 
       
 
-	if( dist <= D  ) {/* shoving to remove the overlap */
+	if( dist < D  ) {/* shoving to remove the overlap */
             mag = 0.5 * ( xij );
 	}
         else {/* adhesion */
@@ -74,7 +74,9 @@ void ModelRoutine::computeForceSpAgent( const VIdx& vIdx0, const SpAgent& spAgen
         // Bonds
         if (spAgent0.junctionInfo.isLinked(spAgent1.junctionInfo) == true) {
             REAL sij = A_AGENT_BOND_S[type0][type1] ;
-            if ( sij  >  0.0 ) {    
+            if ( sij  >  0.0 ) {   
+                D = R0 + R1;
+                xij  = D - dist  ; 
 #if REAL_IS_FLOAT
                 mag = mag + 0.5 * xij * tanhf( FABS(xij) * sij);
 #else
@@ -107,15 +109,15 @@ void ModelRoutine::computeExtraMechIntrctSpAgent( const VIdx& vIdx0, const SpAge
         REAL R0 = A_AGENT_SHOVING_SCALE[type0]*spAgent0.state.getRadius();
         REAL R1 = A_AGENT_SHOVING_SCALE[type1]*spAgent1.state.getRadius();
 
-        REAL dist_threshold = A_AGENT_BOND_DESTROY_FACTOR[type0] *(R0 + R1);
+        REAL dist_threshold = R0 + R1;
 
         if( spAgent0.junctionInfo.isLinked( spAgent1.junctionInfo ) == true ) {
-           if( dist > dist_threshold ) {
+           if( dist > A_AGENT_BOND_DESTROY_FACTOR[type0]* dist_threshold ) {
               unlink = true;/* break junction */
            }
         }
         else {/* no junction */
-           if(  dist < dist_threshold  ) {
+           if(  dist < A_AGENT_BOND_CREATE_FACTOR[type0]* dist_threshold  ) {
               link = true;/* form junction */
               end0.setType(0);
               end1.setType(0);
