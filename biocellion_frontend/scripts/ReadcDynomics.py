@@ -4,9 +4,9 @@ import random
 from xml.etree.ElementTree import Element, SubElement, Comment
 from ElementTree_pretty import prettify
 from BiocellionParam  import diffusible_solutes, cell_types, domain_parameters, mechanical_parameters, multigrid_solver_parm, basic_simulation_param 
-from BiocellionParam import create_reaction, CreateMonodKinetic, CreateSimpleInhibition 
+from BiocellionParam import create_reaction, CreateMonodKinetic, CreateSimpleInhibition, CreateBinding, create_e_perturbations
 
-def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, xmlfilename, directory ):
+def read_xml( diffusibles, celltypes, myreactions, myforces, eperturbations,  mydomain, mygridsolver, mysimulator, xmlfilename, directory ):
 
 
  ## read parameters from input file.
@@ -25,13 +25,16 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
      bcell_num_diffusibles = bcell_num_diffusibles + 1
 
  # Find the number cell types
- bcell_num_celltypes = 0
  for species in root.findall('species'):
      name = species.get('name')
      celltypes[ name ] = cell_types()
-     celltypes[ name ]['id'] = bcell_num_celltypes      
+  
+ # assign an id to the cell types
+ bcell_num_celltypes = 0
+ for cell  in celltypes :
+     celltypes[cell]['id'] = bcell_num_celltypes
      bcell_num_celltypes = bcell_num_celltypes + 1  
-
+  
  # Initialize the mechanical interactions
  for i in range(0,bcell_num_celltypes):
      myforces.append([])
@@ -45,9 +48,13 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
      bcell_num_reactions = bcell_num_reactions + 1
      myreactions[name] = create_reaction()
      myreactions[name]['catalyzedby'] = reaction.get('catalyzedBy')
+     if ( reaction.get('class')=="ReactionFactorFlux"):
+        myreactions[name]['FluxFlag'] = True;
+
      for param in reaction.iter('param'):
          if ( param.get('name')=="muMax"):
-             myreactions[name]['muMax'] = float(param.text)/3600.0 # s^-1 
+             #myreactions[name]['muMax'] = float(param.text)/3600.0 # s^-1 
+             myreactions[name]['muMax'] = float(param.text) # s^-1 
      for yields in reaction.iter('yield'):
          for param in yields.iter('param'):
              myreactions[name]['yields'].append(param.get('name'))
@@ -63,6 +70,10 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
          elif ( kinetic.get('class') == "FirstOrderKinetic"):
             temp = CreateMonodKinetic()
             myreactions[name]['MonodKinetic'].append(temp)
+         elif ( kinetic.get('class') == "Binding" ): 
+            temp = CreateBinding()
+            temp['solute'] = kinetic.get('solute') 
+            myreactions[name]['Binding'].append(temp)
          else :
             sys.exit("ERROR : reaction factor not supperted  ")
                  
@@ -79,11 +90,11 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
     if ( cDynomicTime == 0 ):
        sys.exit("ERROR : reading agentTimeStep")   
      
-
     for param in simulator.iter('param'):
-       if ( param.get('name')=="agentTimeStep"):
-          temp = 1.0 / float(param.text)    
-          mysimulator['outputPeriod']=round(temp)
+       if ( param.get('name')=="outputPeriod"):
+          temp = float(param.text)*3600 / mysimulator['baselinetime']  
+          if ( temp >= 1 ) :
+             mysimulator['outputPeriod']=round(temp)
        elif ( param.get('name')=="endOfSimulation"): 
           temp = float(param.text) * 3600
           mysimulator['numbersteps']=round(temp/cDynomicTime)
@@ -102,12 +113,14 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
 
        for param in solute.findall('param'):
           if ( param.get('name') == "diffusivity" ):
-              factor = 0.0; # change units to um^2 /s
+              factor = 1.0; # change units to um^2 /s
               if ( param.get('unit') == "m2.day-1" ):
                   factor = 1.15741e7 
               value =float(param.text) * factor 
               diffusibles[name]['Dcoef_cd'] = value
               diffusibles[name]['Dcoef_agar'] = value
+              if ( param.get('colonyonly') == "true" ):
+                  diffusibles[name]['colonyonly'] = True  
 
  # read information from particles (density)
  density_biomass = -1.0
@@ -163,33 +176,69 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
         elif ( param.get('name') == "biofilmDiffusivity"): 
            mydomain['biofilmDiffusivity'] = float(param.text) 
             
- 
+ for agentgrid  in root.iter('agentGrid'): 
+    for param in agentgrid.findall('param'):
+       if ( param.get('name') == "resolution" ):  
+           mydomain['resolution_agent'] = float(param.text) 
+ if ( mydomain['resolution_agent'] == 0.0 ):
+    mydomain['resolution_agent'] = mydomain['resolution']
+
  # read boundar conditions 
  for bc in root.iter('boundaryCondition'):
     if (bc.get('name') == "yNz" ):
        if ( bc.get('class') == "BoundaryZeroFlux" ):
           mygridsolver['bcType_x+']='BC_TYPE_NEUMANN_CONST'
           mygridsolver['bcVal_x+']= 0.0
+          mygridsolver['dbtype_x'] = 'HARD'
+       elif  ( bc.get('class') == "BoundaryZeroFluxDisappear"):
+          mygridsolver['bcType_x+']='BC_TYPE_NEUMANN_CONST'
+          mygridsolver['bcVal_x+']= 0.0
+          mygridsolver['dbtype_x'] = 'DISAPPEAR'
     elif (bc.get('name') == "y0z" ):
        if ( bc.get('class') == "BoundaryZeroFlux" ):
           mygridsolver['bcType_x-']='BC_TYPE_NEUMANN_CONST'
           mygridsolver['bcVal_x-']= 0.0
+          mygridsolver['dbtype_x'] = 'HARD'
+       elif ( bc.get('class') == "BoundaryZeroFluxDisappear"):
+          mygridsolver['bcType_x-']='BC_TYPE_NEUMANN_CONST'
+          mygridsolver['bcVal_x-']= 0.0
+          mygridsolver['dbtype_x'] = 'DISAPPEAR'
     elif (bc.get('name') == "xNz" ):
        if ( bc.get('class') == "BoundaryZeroFlux" ):
           mygridsolver['bcType_y+']='BC_TYPE_NEUMANN_CONST'
           mygridsolver['bcVal_y+']= 0.0
+          mygridsolver['dbtype_y'] = 'HARD'
+       elif ( bc.get('class') == "BoundaryZeroFluxDisappear"):
+          mygridsolver['bcType_y+']='BC_TYPE_NEUMANN_CONST'
+          mygridsolver['bcVal_y+']= 0.0
+          mygridsolver['dbtype_y'] = 'DISAPPEAR'
     elif (bc.get('name') == "x0z" ):
        if ( bc.get('class') == "BoundaryZeroFlux" ):
           mygridsolver['bcType_y-']='BC_TYPE_NEUMANN_CONST'
           mygridsolver['bcVal_y-']= 0.0
+          mygridsolver['dbtype_y'] = 'HARD'
+       elif ( bc.get('class') == "BoundaryZeroFluxDisappear"):
+          mygridsolver['bcType_y-']='BC_TYPE_NEUMANN_CONST'
+          mygridsolver['bcVal_y-']= 0.0
+          mygridsolver['dbtype_y'] = 'DISAPPEAR'
     elif (bc.get('name') == "xNy" ):
        if ( bc.get('class') == "BoundaryZeroFlux" ):
           mygridsolver['bcType_z+']='BC_TYPE_NEUMANN_CONST'
           mygridsolver['bcVal_z+']= 0.0
+          mygridsolver['dbtype_z'] = 'HARD'
+       elif ( bc.get('class') == "BoundaryZeroFluxDisappear"):
+          mygridsolver['bcType_z+']='BC_TYPE_NEUMANN_CONST'
+          mygridsolver['bcVal_z+']= 0.0
+          mygridsolver['dbtype_z'] = 'DISAPPEAR'
     elif (bc.get('name') == "x0y" ):
-       if ( bc.get('class') == "BoundaryZeroFlux" ):
+       if ( bc.get('class') == "BoundaryZeroFlux"):
           mygridsolver['bcType_z-']='BC_TYPE_NEUMANN_CONST'
           mygridsolver['bcVal_z-']= 0.0
+          mygridsolver['dbtype_z'] = 'HARD'
+       elif ( bc.get('class') == "BoundaryZeroFluxDisappear"):
+          mygridsolver['bcType_z-']='BC_TYPE_NEUMANN_CONST'
+          mygridsolver['bcVal_z-']= 0.0
+          mygridsolver['dbtype_z'] = 'DISAPPEAR'
 
 
  #solver not implemented yet
@@ -215,6 +264,8 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
           myforces[type_id][type_id]['attachToBoundaryCreateFactor'] = float(param.text)
        elif ( param.get('name') == "attachToBoundaryDestroyFactor" ):
           myforces[type_id][type_id]['attachToBoundaryDestroyFactor'] = float(param.text)
+       elif ( param.get('name') == "tightJunctionToBoundaryStrength" ):
+          myforces[type_id][type_id]['tightJunctionToBoundaryStrength'] = float(param.text)  
           
 
        if ( mydomain['nDim'] == 2 ) : # in cdynamics , 2 dimnesional siulations uses cylinder
@@ -228,7 +279,8 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
         myforces[type_id][id_j]['adh_strength']=float(adm.get('strength'))
    
     for bond in species.iter('tightJunction'):
-        name_j = bond.get('withSpecies')  
+        name_j = bond.get('withSpecies') 
+        ######## TODO #### check if name is available 
         id_j = celltypes[name_j]['id'] 
         myforces[type_id][id_j]['bond_strength']=float(bond.get('stiffness'))
  
@@ -275,7 +327,7 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
        for blocks in area.findall('blocks'):
           Ncellsx = int(blocks.get('rows'))
           Ncellsy = int(blocks.get('cols'))
-          Ncellsz = int(blocks.get('bars'))
+          Ncellsz = int(blocks.get('bars',default=1))
       
        NumCells = Ncellsx * Ncellsy * Ncellsz  
        if ( NumCells > 0 ) :
@@ -291,6 +343,10 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
                    xx = x_coor[0] +  h_x/2 + i*h_x 
                    yy = y_coor[0] +  h_y/2 + j*h_y
                    zz = z_coor[0] +  h_z/2 + k*h_z
+            
+                   if ( mydomain['nDim'] == 2 ):
+                       zz = 0.5 * mydomain['resolution']  
+        
 
                    value = ( xx, yy, zz, biomass_ini, inert_ini, celltypes[ name ]['id'] )
                    mybuffer = "%f %f %f %f %f %d\n" % value
@@ -311,7 +367,7 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
    
               if ( mydomain['nDim'] == 2 ):
                  zz = 0.5 * mydomain['resolution']  
-         
+        
               value = ( xx, yy, zz, biomass_ini, inert_ini, celltypes[ name ]['id'] )
               mybuffer = "%f %f %f %f %f %d\n" % value
               cells_file.write( mybuffer  )     
@@ -336,8 +392,65 @@ def read_xml( diffusibles, celltypes, myreactions, myforces, mydomain, mygridsol
                
           if ( not found ) : 
               celltypes[name]['molecules'].append(mol)
+     
+    for output in species.findall('moloutput'):
+        mol_name = output.get('name')
+        def_value = output.get('default')
+        celltypes[name]['moloutput'].append( mol_name)
+        celltypes[name]['moloutput_default'].append(float(def_value))
+ 
+    for conditions in species.findall('entryConditions'):
+        x_coor = [-1.0 , -1.0]
+        y_coor = [-1.0 , -1.0]
+        z_coor = [-1.0 , -1.0]
+        Time = -1
+        variable =""
+        var_value = -1.0
+        molecule =""
+        mol_value = -1.0
+        NumCoordinates = 0
+        for condition in conditions.findall('entryCondition'):
+           if ( condition.get('type')=="location"):
+              for coordinates in condition.findall('coordinates'):
+                 NumCoordinates = NumCoordinates + 1
+                 if (NumCoordinates >  2):
+                    sys.exit("ERROR: wrong number of coordinates ")
+                 x_coor[NumCoordinates-1] = float(coordinates.get('x'))
+                 y_coor[NumCoordinates-1] = float(coordinates.get('y'))
+                 z_coor[NumCoordinates-1] = float(coordinates.get('z'))
+           elif ( condition.get('type')=="timing"): 
+              for param in condition.findall('param'):
+                 if ( param.get('name') == "biomass" ):
+                    var_value = float(param.text)
+                    variable = "biomass"
+                 elif ( param.get('name') == "time" ):
+                    if ( param.get('unit') == "hour" ):
+                       Time = int (float(param.text)*3600/mysimulator['baselinetime'])
+                    elif( param.get('unit') == "hour" ):
+                       Time = int  (float(param.text)/mysimulator['baselinetime'])
+                    else :
+                       Time = int(param.text)
+           
+        if (( NumCoordinates == 2) and ( Time > 0 )):
+            eperturbations[name] = create_e_perturbations();
+            eperturbations[name]['xo'] = x_coor[0] 
+            eperturbations[name]['xf'] = x_coor[1] 
+            eperturbations[name]['yo'] = y_coor[0] 
+            eperturbations[name]['yf'] = y_coor[1] 
+            eperturbations[name]['zo'] = z_coor[0] 
+            eperturbations[name]['zf'] = z_coor[1] 
+            eperturbations[name]['TimeStep'] = Time 
+            eperturbations[name]['AgentType'] = name  
+            if ( variable == "biomass") :
+               eperturbations[name]['variable'] = 'biomass'
+               eperturbations[name]['variable_val'] = var_value 
 
- # Read reactions inside every cell 
+
+
+
+        
+
+ #  Reabtions[ name ] reactions inside every cell 
  
 
 # This is is commented becuase state and grid will be 

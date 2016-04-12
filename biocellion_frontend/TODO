@@ -1,0 +1,17 @@
+- Add a variable called death whose concentration will determine cell death of cells (apoptosis)
+
+- Implement events for changing states of cells
+
+- How to initialize ODEs?
+
+- Warn about the maximoin interaction distance
+
+- Update the ODEs every cell division event ? 
+
+- Fix the problems of reading the number of cells from multiple cell types
+
+- Work the units :( 
+
+- Implement the cylindrical shapes for Bacterial colonies
+
+- Implement Springs  like forces (A.G Fletcher)

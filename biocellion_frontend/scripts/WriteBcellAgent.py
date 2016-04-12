@@ -14,6 +14,7 @@ def write_biocell_agent( diffusibles, celltypes, myreactions, myforces, mydomain
  agentf.write("\n") 
  agentf.write("void ModelRoutine::spAgentCRNODERHS( const S32 odeNetIdx, const VIdx& vIdx, const SpAgent& spAgent, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox, const Vector<double>& v_y, Vector<double>& v_f ){\n\n" )
 
+ ####### TODO ; probably switch case will better
  agentf.write("agentType_t type = spAgent.state.getType() ;\n\n");
 
  # Print the diffusibles
@@ -42,14 +43,23 @@ def write_biocell_agent( diffusibles, celltypes, myreactions, myforces, mydomain
           agentf.write( str(muMax) )
     
        for MondEq in myreactions[rfactor]['MonodKinetic']:
-          agentf.write("*MonodEquation("+str(MondEq['Ks'])+","+ MondEq['solute']+")")  
+          if ( not (MondEq['Ks'] == 0.0) ): 
+             agentf.write("*MonodEquation("+str(MondEq['Ks'])+","+ MondEq['solute']+")")  
        for SimpleInh  in myreactions[rfactor]['SimpleInhibition']:
-          agentf.write("*SimpleInhibition("+str(SimpleInh['Ki'])+","+ SimpleInh['solute']+")")  
+          agentf.write("*SimpleInhibition("+str(SimpleInh['Ki'])+","+ SimpleInh['solute']+")") 
+       for binding in myreactions[rfactor]['Binding']:
+          agentf.write("*" + binding['solute'] ) 
 
        if ( myreactions[rfactor]['catalyzedby'] == "" ) :
           agentf.write(";\n")
        else:
-          agentf.write( "*"+ myreactions[rfactor]['catalyzedby']+";\n")  
+          VolScale = ""
+          if ( myreactions[rfactor]['FluxFlag'] ):
+             #print "SEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEi" , "\n";
+             #if myreactions[rfactor]['catalyzedby'] in diffusibles :
+             VolScale = "*surface_agent(spAgent.state.getRadius())/volume_agent(spAgent.state.getRadius())"
+
+          agentf.write("*"+myreactions[rfactor]['catalyzedby']+VolScale+";\n")  
     
     # Print the eqution for each concentration rate (v_f)        
     agentf.write("\n")
@@ -57,8 +67,8 @@ def write_biocell_agent( diffusibles, celltypes, myreactions, myforces, mydomain
        equation_f = ""
        sign = ""
        for rfactor in celltypes[cell]['reactions']   : 
-           for i in range(0, len( myreactions[rfactor]['yields']) ):
-              if ( myreactions[rfactor]['yields'][i] == mol ):
+          for i in range(0, len( myreactions[rfactor]['yields']) ):
+             if ( myreactions[rfactor]['yields'][i] == mol ):
                 yieldf = str(myreactions[rfactor]['yieldFactors'][i])
                 equation_f += sign + yieldf + "*r_"+rfactor
                 sign = "+" 
