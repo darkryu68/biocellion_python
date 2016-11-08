@@ -253,10 +253,6 @@
       </yield>
    </reaction>
 
-   
-
-   
-
    <!--#############################################################
                 AGENT GRID SECTION
        ############################################################-->
@@ -304,17 +300,18 @@
       <adhesions>
          <adhesion strength=".2" withSpecies="MyGrowingCells"/>
       </adhesions>
-       
+      
+      <!-- add this molecules to output files  -->
       <moloutput name="AHLin" default="-1.0" />
       <moloutput name="R" default="-1.0" />
 
 
-      <!-- Will initialize the simulation with one cell of this species at coordinates (0, 130, 0)-->
-    <initArea number="1" shape="default">
-       <param name="birthday" unit="hour">0</param>
-       <coordinates x="64" y="64" z="0"/>
-       <coordinates x="64" y="64" z="0"/>
-    </initArea>    
+     <!-- Will initialize the simulation with one cell of this species at coordinates (0, 130, 0)-->
+     <initArea number="1" shape="default">
+        <param name="birthday" unit="hour">0</param>
+        <coordinates x="64" y="64" z="0"/>
+        <coordinates x="64" y="64" z="0"/>
+     </initArea>    
          
 
    </species>

@@ -12,7 +12,7 @@ def write_biocell_grid( diffusibles, celltypes, myreactions, myforces, mydomain,
      gridf.write(line)
 
  gridf.write("\n") 
- gridf.write("void ModelRoutine::updateIfGridRHSLinear( const S32 elemIdx, const VIdx& vIdx, const UBAgentData& ubAgentData, const Vector<REAL>& v_gridPhi/* [elemIdx] */, const Vector<REAL>& v_gridModelReal/* [elemIdx] */, const Vector<S32>& v_gridModelInt/* [elemIdx] */, REAL& gridRHS/* uptake(-) and secretion (+) */ ) {\n\n")  
+ gridf.write("void ModelRoutine::updateIfSubgridRHSLinear( const S32 elemIdx, const VIdx& vIdx, const VIdx& subgridVOffset, const UBAgentData& ubAgentData, const UBEnv& ubEnv, REAL& gridRHS/* uptake(-) and secretion (+) */ ) {\n\n")  
  
  gridf.write("gridRHS = 0.0 ;\n\n")
  for sol in diffusibles:
@@ -66,7 +66,7 @@ def write_biocell_grid( diffusibles, celltypes, myreactions, myforces, mydomain,
        gridf.write("\t\t\t\t\tsecretionPct = spAgent.state.getModelReal( CELL_MODEL_REAL_SECRETION_PCT );\n")
        gridf.write("\n")
        for mysol in diffusibles: 
-          gridf.write("\t\t\t\t\tREAL "+mysol+" =  v_gridPhi[DIFFUSIBLE_ELEM_"+mysol+"];\n")
+          gridf.write("\t\t\t\t\tREAL "+mysol+" = ubEnv.getPhi(DIFFUSIBLE_ELEM_"+mysol+");\n")
        gridf.write("\n")
        for mymol in celltypes[cell]['molecules']:
           gridf.write("\t\t\t\t\tREAL "+mymol+" = spAgent.state.getODEVal(0,ODE_NET_VAR_"+cell+"_"+mymol+");\n")

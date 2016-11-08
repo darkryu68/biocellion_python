@@ -27,7 +27,9 @@ def cell_types():
     ctype['VolFactor'] = False # divide the concentration by Volume 
     ctype['reactions'] = [] # internal reations
     ctype['moloutput'] = [] # molecules that will be displayed
-    ctype['moloutput_default'] = [] # molecules that will be displayed
+    ctype['moloutput_default'] = [] # molecules that will be displayed 
+    ctype['Dcoef'] = 0.0 # Diffusion coefficient of cells fro random movement
+    ctype['friction'] = 1.0 # Friction coefficient
     return ctype
 
 def create_e_perturbations(): 

@@ -1,0 +1,21 @@
+
+Clone biocellion_python project from github.
+
+Inside 'biocellion_python' you will find the directory 'biocellion_frontend' you can copy the that directory on other directory, on the cloud, or in other machine when you run bioellion1.2.
+
+Go inside directory 'biocellion_frontend' and open it with vi
+ 
+vi read_parameters_cDynomics.py
+
+modify the following lines:
+
+xmlfilename = './examples/QS_Growth_2D.xml'
+dirname = '/home/baguilar/biocellion-user/QS_Growth_2D'
+
+'xmlfilename' is the name of the xml file in which the data for your model is specified.
+'dirname' is the directory name in which the model will be located.
+
+After you finished editing this lines. You only need to run the python script.
+
+./read_parameters_cDynomics.py
+

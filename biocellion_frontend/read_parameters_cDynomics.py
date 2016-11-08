@@ -16,29 +16,16 @@ from WriteBcellGrid import write_biocell_grid
 from WriteBcellXML import write_bcell_xml  
 from WriteBcellOtherFiles import write_biocell_otherfiles  
 
-
 ## read parameters from input file.
+xmlfilename = './examples/QS_Growth_2D.xml'
+dirname = '/home/baguilar/biocellion-user/QS_Growth_2D'
 
-xmlfilename = './examples/basic-growth-noAgar-2D.xml'
-dirname = './examples/basic_growth_noAgar_2D'
-
-#xmlfilename = './examples/basic-growth-noAgar-3D.xml'
-#dirname = './examples/basic_growth_noAgar_3D'
-
-#xmlfilename = './examples/basic-growth-glucose-2D.xml'
-#dirname = './examples/basic_growth_glucose_2D' 
-
-#xmlfilename = './examples/QS_Growth_2D.xml'
-#dirname = './examples/QS_Growth_2D'
-
-#xmlfilename = './examples/InducedWrinkles_2D.xml'
-#dirname = './examples/InducedWrinkles_2D'
 
 if not os.path.exists(dirname):
     os.makedirs(dirname)
 
-if not os.path.exists(dirname+'/model'):
-    os.makedirs( dirname +'/model' )
+##if not os.path.exists(dirname+'/model'):
+##    os.makedirs( dirname +'/model' )
 
 if not os.path.exists(dirname+'/output'):
     os.makedirs( dirname +'/output' )
@@ -56,7 +43,7 @@ mysimulator = basic_simulation_param() # timings and other basic arameters of si
 
 
 # read xml from cDynomics
-read_xml(diffusibles, celltypes, myreactions, myforces, eperturbations, mydomain, mygridsolver, mysimulator, xmlfilename, dirname+'/model')
+read_xml(diffusibles, celltypes, myreactions, myforces, eperturbations, mydomain, mygridsolver, mysimulator, xmlfilename, dirname )
 
 print " -----  Cell Types -------------- "
 print  celltypes
@@ -75,11 +62,11 @@ if ( mydomain['nDim'] == 2 ) :
        mydomain['nz'] = 4 
    
 
-write_biocell_header(diffusibles, celltypes, myreactions, myforces, eperturbations, mydomain, mygridsolver, mysimulator, dirname+'/model' )
-write_biocell_config(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
-write_biocell_agent(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
-write_biocell_grid(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
-write_bcell_xml(diffusibles, celltypes, myreactions, myforces, mydomain,mygridsolver, mysimulator, dirname+'/model')
-write_biocell_otherfiles(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname+'/model')
+write_biocell_header(diffusibles, celltypes, myreactions, myforces, eperturbations, mydomain, mygridsolver, mysimulator, dirname )
+write_biocell_config(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname )
+write_biocell_agent(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname )
+write_biocell_grid(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname )
+write_bcell_xml(diffusibles, celltypes, myreactions, myforces, mydomain,mygridsolver, mysimulator, dirname )
+write_biocell_otherfiles(diffusibles, celltypes, myreactions, myforces, mydomain, mygridsolver, mysimulator, dirname )
 
 

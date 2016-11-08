@@ -11,78 +11,64 @@
         SIMULATOR SECTION
     ######################################################################-->
   <simulator>
-    <param name="restartPreviousRun">false</param>
-    <param name="randomSeed">44</param>
     <param name="outputPeriod" unit="hour">0.5</param>
     <timeStep>
-      <param name="adaptive">false</param>
-      <param name="timeStepIni" unit="hour">1</param>
-      <param name="timeStepMin" unit="hour">0.025</param>
-      <param name="timeStepMax" unit="hour">1</param>
-      <param name="endOfSimulation" unit="hour">150</param>
+       <!-- simulation time -->
+       <param name="endOfSimulation" unit="hour">150</param>
     </timeStep>
-    <!-- The AGENTTIMESTEP which should always be EQUAL or LOWER than the global time step -->
+    <!-- baseline time step -->
     <param name="agentTimeStep" unit="hour">0.05</param>
   </simulator>
-
-
-  <!--#####################################################################
-        INPUT SECTION
-    ######################################################################-->
-  <input>
-    <param name="useAgentFile">false</param>
-    <param name="inputAgentFileURL">agent_State(last).xml</param>
-    <param name="useBulkFile">false</param>
-    <param name="inputBulkFileURL">env_Sum(last).xml</param>
-  </input>
 
   <!--#####################################################################
         SOLUTES AND BIOMASS TYPES SECTION
     ######################################################################-->
+  <!-- diffusion coefficient 1e-6 -->
+  <!-- colonyonly means difuusion only within biomass -->
   <solute domain="MyYeastColony" name="Glucose">
     <param name="diffusivity" unit="m2.day-1" colonyonly="true">1e-6</param>
   </solute>
   
-  <solute domain="MyYeastColony" name="pressure">
-    <param name="diffusivity" unit="m2.day-1">1</param>
-  </solute>
-
   <particle name="biomass">
     <param name="density" unit="g.L-1">150</param>
   </particle>
   <particle name="inert">
     <param name="density" unit="g.L-1">150</param>
   </particle>
+
   <!--#####################################################################
         WORLD SECTION
     ######################################################################-->
   <world>
-    <agar name="myAgar">
-      <param name="depth" unit="unknown">12</param>
-      <param name="width" unit="unknown">32</param>
-      <param name="height" unit="unknown">1</param>
-      <param name="concentration" unit="unknown">100</param>
-      <param name="D" unit="h-1">1</param>
-      <param name="advRate" unit="unknown">2.5e-4</param>
-      <param name="T" unit="unknown">300</param>
-      <param name="updateFreq" unit="unknown">1</param>
-    </agar>
+     <agar name="myAgar">
+
+        <!-- height of agar -->
+        <param name="depth" unit="unknown">12</param>
+        <param name="width" unit="unknown">32</param>
+        <param name="height" unit="unknown">1</param>
+
+        <!-- initial concentration -->
+        <param name="concentration" unit="unknown">100</param>
+     </agar>
 
     <computationDomain name="MyYeastColony">
+      <!-- dimension -->
       <grid nDim="2" nI="32" nJ="32" nK="1"/>
-      <param name="resolution" unit="um">8</param>
-      <param name="boundaryLayer" unit="um">0</param>
-      <param name="biofilmDiffusivity">.2</param>
-      <param name="specificArea" unit="m2.m-3">80</param>
 
+      <!-- grid spacing -->
+      <param name="resolution" unit="um">8</param>
+      <!-- difussion multyplied by this for diffusion on biofilms -->
+      <param name="biofilmDiffusivity">.2</param>
+
+      <!-- plane that define agar interface, -->
       <boundaryCondition class="BoundaryAgar" name="y0z">
-        <param name="agar">myAgar</param>
         <shape class="Planar">
           <param name="pointIn" x="-1" y="0" z="0"/>
           <param name="vectorOut" x="-1" y="0" z="0"/>
         </shape>
       </boundaryCondition>
 
+      <!-- define zero flux for diffusables -->
       <boundaryCondition class="BoundaryZeroFlux" name="yNz">
         <shape class="Planar">
           <param name="pointIn" x="32" y="0" z="0"/>
@@ -104,15 +90,23 @@
       </boundaryCondition>
     </computationDomain>
   </world>
+
   <!--#####################################################################
         REACTION SECTION
     ######################################################################-->
+  <!-- B :  biomass -->
+  <!-- G :  Glucose -->
+  <!-- reaction name: Growth,  type:MonodKinetic -->
+  <!-- Growth =  muMax * G / ( Ks + G ) -->
   <reaction catalyzedBy="biomass" class="ReactionFactor" name="Growth">
     <param name="muMax" unit="s-1">6.9444e-06 </param>
     <kineticFactor class="MonodKinetic" solute="Glucose">
       <param name="Ks" unit="g.L-1">5.0</param>
     </kineticFactor>
     <yield>
+      <!-- ODE equations: -->
+      <!-- dG/dt  =  -0.1 * Growth -->
+      <!-- dB/dt  =   2.2 * Growth -->
       <param name="Glucose" unit="g.g-1">-0.1</param>
       <param name="biomass" unit="g.g-1">2.2</param>
     </yield>
@@ -121,35 +115,28 @@
         SOLVER SECTION
     ######################################################################-->
   <solver class="SolverSimple" domain="MyYeastColony" name="solutes">
-    <param name="active">true</param>
+   <!-- 150 steps per baseline time step -->
     <param name="preStep">150</param>
-    <param name="postStep">150</param>
-    <param name="coarseStep">1500</param>
-    <param name="nCycles">5</param>
     <reaction name="Growth"/>
   </solver>
-  <solver class="Solver_pressure" domain="MyYeastColony" name="pressure">
-    <param name="active">true</param>
-  </solver>
+
   <!--#####################################################################
         AGENT GRID SECTION
     ######################################################################-->
   <agentGrid>
-    <param name="computationDomain">MyYeastColony</param>
     <param name="resolution" unit="um">8</param>
-    <param name="shovingMaxNodes">2e6</param>
-    <param name="shovingFraction">0.025</param>
-    <param name="shovingMaxIter">250</param>
-    <param name="shovingMutual">true</param>
   </agentGrid>
+
   <!--#####################################################################
         SPECIES SECTION
     ######################################################################-->
   <species class="Yeast" name="MyGrowingYeast">
     <particle name="biomass">
+      <!-- all cells will be initialized with 12000fg -->
       <param name="mass" unit="fg">12000</param>
     </particle>
     <particle name="inert">
+      <!-- all cells will be initialized with 70fg -->
       <param name="mass" unit="fg">70</param>
     </particle>
     <param name="color">blue</param>
@@ -158,20 +145,17 @@
     <param name="deathRadius" unit="um">0.2</param>
     <param name="shoveFactor" unit="um">1.15</param>
     <param name="shoveLimit" unit="um">0.</param>
-    <param name="epsMax">0.5</param>
-    <param name="kHyd" unit="hr-1">0.1</param>
-    <param name="useActivationInhibition" unit="bit">true</param>
-    <param name="neighborhoodRadiusCoefficient" unit="number">4</param>
+
+    <!-- reactions tha are performed in this cell -->
     <reaction name="Growth" status="active"/>
 
-    <!-- This species will be attracted towards itself -->
+    <!-- cell adhesion -->
     <adhesions>
       <adhesion strength=".2" withSpecies="MyGrowingYeast"/> 
     </adhesions>
 
       <!-- Will initialize the simulation with one cell of this species at coordinates (0, 130, 0)-->
     <initArea number="1" shape="default"> 
-      <param name="birthday" unit="hour">0</param>
       <coordinates x="0" y="130" z="0"/>
       <coordinates x="0" y="130" z="0"/>
     </initArea>

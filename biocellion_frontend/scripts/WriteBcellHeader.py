@@ -8,6 +8,10 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
 
  num_celltypes  = len( celltypes )
 
+ #mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_X,dir[0]*mag);
+ #mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_Y,dir[1]*mag);
+ #mechIntrctData0.setModelReal(CELL_MECH_REAL_FORCE_Z,dir[2]*mag);
+
  # write the files for biocellion
  header = open(directory+"/model_define.h", 'w')
  header.write('#ifndef __MY_DEFINE_H__' +"\n" )
@@ -16,7 +20,7 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
  header.write('#define NUM_JUNCTION_END_TYPES 1 /* we consider only one junction end type */ '+"\n")
  header.write('#define SYSTEM_DIMENSION ')
  header.write( str(mydomain['nDim']) + "\n\n")
- header.write("const REAL MY_PI = 3.14159265358979323846;\n\n")
+# header.write("const REAL MY_PI = 3.14159265358979323846;\n\n")
 
  # write functions used by biocellion model
  if ( mydomain['nDim']  == 2  ):
@@ -72,6 +76,16 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
  header.write("\tNUM_MODEL_INTS \n")
  header.write("} alive_cell_model_int_e;\n\n")
 
+
+ ## 
+ header.write("typedef enum _cell_mech_real_e { \n" ) 
+ header.write("\tCELL_MECH_REAL_FORCE_X,\n" ) 
+ header.write("\tCELL_MECH_REAL_FORCE_Y,\n" ) 
+ header.write("\tCELL_MECH_REAL_FORCE_Z,\n" ) 
+ header.write("\tNUM_CELL_MECH_REALS\n" ) 
+ header.write("} cell_mech_real_e;\n\n" ) 
+ ##
+
  header.write("typedef enum _diffusible_elem_e {\n")
  for solute in diffusibles:
     header.write("\tDIFFUSIBLE_ELEM_"+solute+",\n")
@@ -98,6 +112,7 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
  header.write("typedef enum _model_rng_type_e {\n")
  header.write("\tMODEL_RNG_UNIFORM,\n")
  header.write("\tMODEL_RNG_UNIFORM_10PERCENT,\n")
+ header.write("\tMODEL_RNG_GAUSSIAN,\n")
  header.write("\tNUM_MODEL_RNGS\n")
  header.write("} model_rng_type_e;\n\n")
 
@@ -287,7 +302,14 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
        header.write(comma+str(math.pi*rad*rad*mydomain['resolution_agent']))
     else : header.write(comma+str(4.0*math.pi*rad*rad*rad/3.0 ))
     comma= ", "
- header.write("};\n\n") 
+ header.write("};\n\n")
+
+ header.write("const REAL A_DIFFUSION_COEFF_CELLS[NUM_AGENT_TYPES]={")
+ comma =""
+ for cell in celltypes:
+     header.write(comma + str(celltypes[cell]['Dcoef'] ))
+     comma = ","
+ header.write("};\n")
 
  # here is the link between the agents and \
  header.write("const REAL A_AGENT_ADHESION_S[NUM_AGENT_TYPES][NUM_AGENT_TYPES]={")
@@ -429,6 +451,7 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
           header.write( comma + '-1' )
        comma = ", "
     header.write("}")
+    comma = ","
  header.write("};\n\n") 
 
  # EXTERNAL PERTURBATION 
@@ -438,7 +461,7 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
  header.write("const S32 NUM_E_PERTURBATIONS="+str(NumEpertur)+";\n")
  
  header.write("const ExtConditions A_E_PERTURBATIONS[NUM_E_PERTURBATIONS]={\n")
- omma = ""
+ comma = ""
  for name in eperturbations:
 
        agent=eperturbations[name]['AgentType']
@@ -471,7 +494,7 @@ def write_biocell_header( diffusibles, celltypes, myreactions, myforces, epertur
              header.write("ODE_NET_VAR_"+agent+"_"+str(eperturbations[name]['molecule'])+",")
        header.write(str(eperturbations[name]['molecule_val'])+"}\n")
        
-       comma = ""
+       comma = ","
         
  header.write("};\n\n") 
        

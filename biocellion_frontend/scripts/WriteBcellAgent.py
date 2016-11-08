@@ -12,7 +12,7 @@ def write_biocell_agent( diffusibles, celltypes, myreactions, myforces, mydomain
      agentf.write(line)
 
  agentf.write("\n") 
- agentf.write("void ModelRoutine::spAgentCRNODERHS( const S32 odeNetIdx, const VIdx& vIdx, const SpAgent& spAgent, const Vector<NbrBox<REAL> >& v_gridPhiNbrBox, const Vector<NbrBox<REAL> >& v_gridModelRealNbrBox, const Vector<NbrBox<S32> >& v_gridModelIntNbrBox, const Vector<double>& v_y, Vector<double>& v_f ){\n\n" )
+ agentf.write("void ModelRoutine::spAgentCRNODERHS( const S32 odeNetIdx, const VIdx& vIdx, const SpAgent& spAgent, const NbrUBEnv& nbrUBEnv, const Vector<double>& v_y, Vector<double>& v_f ){\n\n" )
 
  ####### TODO ; probably switch case will better
  agentf.write("agentType_t type = spAgent.state.getType() ;\n\n");
@@ -21,6 +21,8 @@ def write_biocell_agent( diffusibles, celltypes, myreactions, myforces, mydomain
  for solute in diffusibles :
      agentf.write("REAL "+solute+" = spAgent.state.getModelReal(CELL_MODEL_REAL_"+solute+"_AVG );\n") 
  agentf.write("\n")
+  
+ 
 
  for cell in celltypes:
     agentf.write("if ( type == AGENT_TYPE_"+cell+"){\n")
@@ -29,6 +31,15 @@ def write_biocell_agent( diffusibles, celltypes, myreactions, myforces, mydomain
     for mol in  celltypes[cell]['molecules'] :
         agentf.write("\tREAL "+mol+" = v_y[ODE_NET_VAR_"+cell+"_"+mol+"];\n")
     agentf.write("\n") 
+  
+    if 'biomass' not in celltypes[cell]['molecules']: 
+        agentf.write("\tREAL biomass = spAgent.state.getModelReal(CELL_MODEL_REAL_BIOMAS);\n")
+  
+    if 'inert' not in celltypes[cell]['molecules'] :
+        agentf.write("\tREAL inert = spAgent.state.getModelReal(CELL_MODEL_REAL_INERT);\n")
+  
+        
+       
    
     # Print each reaction factor
     for rfactor in myreactions:
