@@ -1,0 +1,324 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+#########################################################################
+ Biocellion: A quorum sensing model for Biocellion, the model was
+ extracted from: A Cell-Based Model for Quorum Sensing in Heterogeneous 
+ Bacterial Colonies, by P. Melke, P. Sahlin, A. Levchenko, and H. Jonsson
+ ( PLoS Comput. Biol. 6(6) e1000819) 
+#########################################################################
+-->
+
+<idynomics> 
+
+   <simulator>
+      <param name="outputPeriod" unit="hour">0.020</param>
+      <timeStep>
+         <param name="endOfSimulation" unit="hour">3.33</param>
+      </timeStep>
+      <!-- The AGENTTIMESTEP which should always be EQUAL or LOWER than the global time step -->
+      <param name="agentTimeStep" unit="hour">0.001</param><!--3.6sec-->
+   </simulator>
+
+   <!-- ##############################################################
+   SOLUTES AND BIOMASS TYPES SECTION
+   ###################################################################-->
+   <solute name="AHLext">
+      <param name="diffusivity" colonyonly="false" >0.1</param><!--D 0.1-->      
+   </solute>
+
+   <particle name="biomass">
+      <param name="density" unit="g.L-1">150</param>
+   </particle>
+   <particle name="inert">
+      <param name="density" unit="g.L-1">150</param>
+   </particle> 
+ 
+   <!--################################################################
+   WORLD SECTION
+   ###################################################################-->   
+   <world>
+      <computationDomain name="MyColony">
+      <grid nDim="2" nI="16" nJ="16" nK="1" />
+      <param name="resolution" unit="um">8</param>
+      <param name="boundaryLayer" unit="um">0</param>
+      <param name="biofilmDiffusivity">1</param>
+ 
+      <boundaryCondition class="BoundaryZeroFluxDisappear" name="y0z">
+         <shape class="Planar">
+            <param name="pointIn" x="-1" y="0" z="0" />
+            <param name="vectorOut" x="-1" y="0" z="0" />
+         </shape>
+      </boundaryCondition>
+      <boundaryCondition class="BoundaryZeroFluxDisappear" name="yNz">
+        <shape class="Planar">
+          <param name="pointIn" x="32" y="0" z="0" />
+          <param name="vectorOut" x="1" y="0" z="0" />
+        </shape>
+      </boundaryCondition>
+
+      <boundaryCondition class="BoundaryZeroFluxDisappear" name="x0z">
+        <shape class="Planar">
+          <param name="pointIn" x="0" y="-1" z="0" />
+          <param name="vectorOut" x="0" y="-1" z="0" />
+        </shape>
+      </boundaryCondition>
+      <boundaryCondition class="BoundaryZeroFluxDisappear" name="xNz">
+        <shape class="Planar">
+          <param name="pointIn" x="0" y="32" z="0" />
+          <param name="vectorOut" x="0" y="1" z="0" />
+        </shape>
+      </boundaryCondition>
+      
+      <boundaryCondition class="BoundaryZeroFluxDisappear" name="x0y">
+        <shape class="Planar">
+          <param name="pointIn" x="0" y="0" z="-1" />
+          <param name="vectorOut" x="0" y="0" z="-1" />
+        </shape>
+      </boundaryCondition>
+      <boundaryCondition class="BoundaryZeroFlux" name="xNy">
+        <shape class="Planar">
+          <param name="pointIn" x="0" y="0" z="32" />
+          <param name="vectorOut" x="0" y="0" z="1" />
+        </shape>
+      </boundaryCondition>
+
+      </computationDomain>
+   </world>   
+
+   <!--##############################################################
+   REACTION SECTION
+   ##############################################################-->
+   <reaction catalyzedBy="" class="ReactionFactor" name="ConstantRate">
+      <param name="muMax" unit="hour-1">1</param>
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1"> 0.0001 </param> <!--CoA -->
+         <param name="R" unit="g.g-1"> 0.0001 </param> <!--CoR -->
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="" class="ReactionFactor" name="CmodulateA">
+      <param name="muMax" unit="hour-1">0.002</param> <!--k1A -->
+      <kineticFactor class="MonodKinetic" solute="C">
+         <param name="Ks" unit="g.L-1">2e-7 </param> <!-- KDA -->
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1">1.0</param>
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="AHLin" class="ReactionFactor" name="degradationA">
+      <param name="muMax" unit="hour-1">0.01</param> <!--k2A -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1"> -1.0 </param>
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="AHLin" class="ReactionFactor" name="complexRA">
+      <param name="muMax" unit="hour-1">0.1</param> <!--k5 -->
+      <kineticFactor class="Binding" solute="R"> 
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1">-1.0 </param>
+         <param name="R" unit="g.g-1">-1.0 </param>
+         <param name="RA" unit="g.g-1">1.0 </param>
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="RA" class="ReactionFactor" name="dissociationRA">
+      <param name="muMax" unit="hour-1">0.1</param> <!--k6 -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+          <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1">1.0 </param>
+         <param name="R" unit="g.g-1">1.0 </param>
+         <param name="RA" unit="g.g-1">-1.0 </param>
+      </yield>
+   </reaction>   
+
+   <reaction catalyzedBy="AHLin" class="ReactionFactorFlux" name="secretionA">
+      <param name="muMax" unit="hour-1">0.1</param> <!-- pout 0.1 -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1">-1.0 </param>
+         <param name="AHLext" unit="g.g-1">1.0 </param>
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="AHLext" class="ReactionFactorFlux" name="uptakeA">
+      <param name="muMax" unit="hour-1">0.1</param> <!-- pin 0.1 -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1">1.0 </param>
+         <param name="AHLext" unit="g.g-1">-1.0 </param> <!-- -1.0 -->
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="" class="ReactionFactor" name="CmodulateR">
+      <param name="muMax" unit="hour-1">0.002</param> <!-- KiR  -->
+      <kineticFactor class="MonodKinetic" solute="C">
+         <param name="Ks" unit="g.L-1">0.0001</param> <!-- KDR -->
+      </kineticFactor>
+      <yield>
+         <param name="R" unit="g.g-1">1.0</param>
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="R" class="ReactionFactor" name="degradationiB">
+      <param name="muMax" unit="hour-1">1</param>
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="R" unit="g.g-1">-0.01 </param> <!-- k2R -->
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="RA" class="ReactionFactor" name="dimmerizationC">
+      <param name="muMax" unit="hour-1">0.1</param> <!-- k3 -->
+      <kineticFactor class="Binding" solute="RA">
+      </kineticFactor>
+      <yield>
+         <param name="RA" unit="g.g-1">-2.0 </param>
+         <param name="C" unit="g.g-1">1.0 </param>
+      </yield>
+   </reaction>
+
+   <reaction catalyzedBy="C" class="ReactionFactor" name="dissociationC">
+      <param name="muMax" unit="hour-1">0.1</param> <!-- k4 -->
+      <kineticFactor class="FirstOrderKinetic" solute=""> 
+      </kineticFactor>
+      <yield>
+         <param name="RA" unit="g.g-1">2.0 </param>
+         <param name="C" unit="g.g-1">-1.0 </param>
+      </yield>
+   </reaction>
+
+   <!-- dilution to consider cell volume expansion --> 
+   <reaction catalyzedBy="AHLin" class="ReactionFactor" name="dilutionA">
+      <param name="muMax" unit="hour-1">0.001</param> <!--ks -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="AHLin" unit="g.g-1"> -1.0 </param>
+      </yield>
+   </reaction>
+   <reaction catalyzedBy="R" class="ReactionFactor" name="dilutionR">
+      <param name="muMax" unit="hour-1">0.001</param> <!--ks -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="R" unit="g.g-1"> -1.0 </param>
+      </yield>
+   </reaction>
+   <reaction catalyzedBy="RA" class="ReactionFactor" name="dilutionRA">
+      <param name="muMax" unit="hour-1">0.001</param> <!--ks -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="RA" unit="g.g-1"> -1.0 </param>
+      </yield>
+   </reaction>
+   <reaction catalyzedBy="C" class="ReactionFactor" name="dilutionC">
+      <param name="muMax" unit="hour-1">0.001</param> <!--ks -->
+      <kineticFactor class="FirstOrderKinetic" solute="">
+         <param name="Ks" unit="g.L-1">0.0</param>
+      </kineticFactor>
+      <yield>
+         <param name="C" unit="g.g-1"> -1.0 </param>
+      </yield>
+   </reaction>
+
+
+   <!-- Growth rate, similar but not equal to  the paper -->
+   <reaction catalyzedBy="biomass" class="ReactionFactor" name="Growth">
+      <param name="muMax" unit="hour-1">0.0005</param> <!-- k4=2*0.0005 -->
+      <kineticFactor class="MonodKinetic" solute="AHLin">
+         <param name="Ks" unit="g.L-1">0.0</param> <!-- K 0.1-->
+      </kineticFactor>
+      <yield>
+         <param name="biomass" unit="g.g-1">1.0 </param>
+      </yield>
+   </reaction>
+
+   
+
+   
+
+   <!--#############################################################
+                AGENT GRID SECTION
+       ############################################################-->
+   <agentGrid>
+      <param name="resolution" unit="um">8</param>
+   </agentGrid>
+
+   <!--###########################################################
+   SPECIES SECTION
+   ##### ########################################################-->
+   <species class="Yeast" name="MyGrowingCells">
+      <particle name="biomass">
+         <param name="mass" unit="fg">12000</param>
+      </particle>
+      <particle name="inert">
+         <param name="mass" unit="fg">70</param>
+      </particle>
+      <param name="divRadius" unit="um">2.5</param>
+      <param name="deathRadius" unit="um">0.2</param>
+      <param name="shoveFactor" unit="um">1.15</param>
+      <param name="shoveLimit" unit="um">0.</param>
+    
+   
+      <!-- Reactions of the GRN  --> 
+      <reaction  name="ConstantRate"  status="active"/> 
+      <reaction  name="CmodulateA"  status="active"/> 
+      <reaction  name="degradationA"  status="active"/> 
+      <reaction  name="complexRA"  status="active"/> 
+      <reaction  name="dissociationRA"  status="active"/> 
+      <reaction  name="secretionA"  status="active"/> 
+      <reaction  name="uptakeA"  status="active"/> 
+      <reaction  name="CmodulateR"  status="active"/> 
+      <reaction  name="degradationiB"  status="active"/> 
+      <reaction  name="dimmerizationC"  status="active"/> 
+      <reaction  name="dissociationC"  status="active"/> 
+      <!-- Reactions of dilution due tu cell growth   --> 
+      <reaction  name="dilutionA" status="active"/> 
+      <reaction  name="dilutionR"  status="active"/> 
+      <reaction  name="dilutionRA"  status="active"/> 
+      <reaction  name="dilutionC"  status="active"/> 
+      <!-- Reactions of biomass(volume) growth   --> 
+      <reaction  name="Growth"  status="active"/> 
+
+      <!-- This species will be attracted towards itself -->
+      <adhesions>
+         <adhesion strength=".2" withSpecies="MyGrowingCells"/>
+      </adhesions>
+       
+      <moloutput name="AHLin" default="-1.0" />
+      <moloutput name="R" default="-1.0" />
+
+
+      <!-- Will initialize the simulation with one cell of this species at coordinates (0, 130, 0)-->
+    <initArea number="1" shape="default">
+       <param name="birthday" unit="hour">0</param>
+       <coordinates x="64" y="64" z="0"/>
+       <coordinates x="64" y="64" z="0"/>
+    </initArea>    
+         
+
+   </species>
+   
+
+</idynomics>
+

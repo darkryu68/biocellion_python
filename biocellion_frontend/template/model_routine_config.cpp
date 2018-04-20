@@ -70,7 +70,7 @@ void ModelRoutine::updateTimeStepInfo( TimeStepInfo& timeStepInfo ) {
 void ModelRoutine::updateSyncMethod( sync_method_e& extraMechIntrctSyncMethod, sync_method_e& updateIfGridVarSyncMethod/* dummy if both callUpdateIfGridVarPreStateAndGridStep and callUpdateIfGridVarPostStateAndGridStep are set to false in ModelRoutine::updateOptModelRoutineCallInfo */ ) {
 	/* MODEL START */
 
-	extraMechIntrctSyncMethod = SYNC_METHOD_OVERWRITE;
+	extraMechIntrctSyncMethod = SYNC_METHOD_DELTA;
 	updateIfGridVarSyncMethod = SYNC_METHOD_OVERWRITE;
 
 	/* MODEL END */
@@ -124,7 +124,7 @@ void ModelRoutine::updateFileOutputInfo( FileOutputInfo& fileOutputInfo ) {
 	/* MODEL START */
 
 	fileOutputInfo.particleOutput = true;
-	fileOutputInfo.particleNumExtraOutputVars = 3;
+	fileOutputInfo.particleNumExtraOutputVars = NUM_AGENT_OUTPUTS ;
 	fileOutputInfo.v_gridPhiOutput.assign( NUM_DIFFUSIBLE_ELEMS, true );
 	fileOutputInfo.v_gridPhiOutputDivideByKappa.assign( NUM_DIFFUSIBLE_ELEMS, false );
 
@@ -204,12 +204,6 @@ void ModelRoutine::updateGlobalData( Vector<U8>& v_globalData ) {
          for( idx_t k = 0 ; k < ifRegionSize[2]  ; k++ ) {
             UBInitData& ubInitData = p_ubInitData[VIdx::getIdx3DTo1D( i, j, k, ifRegionSize )];
             ubInitData.numCells = 0;
-            ubInitData.x_offset = 0.0 ;
-            ubInitData.y_offset = 0.0 ;
-            ubInitData.z_offset = 0.0 ;
-            ubInitData.a_type = 0 ;
-            ubInitData.biomass = 0.0 ;
-            ubInitData.inert = 0.0 ;
             ubInitData.IdxIniCellData  = -1 ;
          }
       }

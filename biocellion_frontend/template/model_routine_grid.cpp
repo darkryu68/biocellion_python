@@ -15,11 +15,14 @@ void ModelRoutine::initIfGridVar( const VIdx& vIdx, const UBAgentData& ubAgentDa
     for ( S32 sol = 0 ; sol < NUM_DIFFUSIBLE_ELEMS ; sol++ )  {  
 
        if(  vIdx[0] >= AGAR_HEIGHT ) {
-          v_gridPhi[ sol ] = 0.0;
+          v_gridPhi[ sol ] = A_INIT_IF_CONCENTRATION[ sol ]; ;
        }
        else {
-          v_gridPhi[ sol ] = A_INIT_CONCENTRATION[ sol ];
+          v_gridPhi[ sol ] = A_INIT_AGAR_CONCENTRATION[ sol ];
        }
+
+       if ( (SYSTEM_DIMENSION == 2) && (vIdx[2]>0) )
+           v_gridPhi[ sol ] = 0.0;
     }
 
 
@@ -87,9 +90,9 @@ else {
 
                     for(ubAgentIdx_t l=0; l<(ubAgentIdx_t)ubAgentData.v_spAgent.size(); l++ ) {
                         const SpAgent& spAgent = ubAgentData.v_spAgent[l];
-                        agentType_t type = spAgent.state.getType();
+                        //agentType_t type = spAgent.state.getType();
                         REAL ratio = Util::computeSphereUBVolOvlpRatio( SPHERE_UB_VOL_OVLP_RATIO_MAX_LEVEL, spAgent.vOffset, spAgent.state.getRadius(), ubVIdxOffset );
-                        S32 sourceIdx = A_AGENT_GROWTH_SOURCE[type];
+                        //S32 sourceIdx = A_AGENT_GROWTH_SOURCE[type];
                     
 
 			if( ratio > 0.0 ) {
@@ -266,18 +269,31 @@ void ModelRoutine::updateIfGridBetaInIfRegion( const S32 elemIdx, const S32 dim,
         gridBeta0 = A_DIFFUSION_COEFF_AGAR[elemIdx];
     }
     else {
-        REAL scale = v_gridModelReal0[GRID_MODEL_REAL_COLONY_VOL_RATIO];
-        CHECK( scale <= 1.0 );
-        gridBeta0 = A_DIFFUSION_COEFF_COLONY[elemIdx] * scale;
+        gridBeta0 = A_DIFFUSION_COEFF_COLONY[elemIdx];
+        if( A_DIFFUSION_COLONY_ONLY[elemIdx] ) {
+            REAL scale = v_gridModelReal0[GRID_MODEL_REAL_COLONY_VOL_RATIO];
+            CHECK( scale <= 1.0 );
+            gridBeta0 *= scale; 
+        }
     }
 
     if( vIdx1[0] < AGAR_HEIGHT ) {
         gridBeta1 = A_DIFFUSION_COEFF_AGAR[elemIdx];
     }
     else {
-        REAL scale = v_gridModelReal1[GRID_MODEL_REAL_COLONY_VOL_RATIO];
-        CHECK( scale <= 1.0 );
-        gridBeta1 = A_DIFFUSION_COEFF_COLONY[elemIdx] * scale;
+        gridBeta1 = A_DIFFUSION_COEFF_COLONY[elemIdx];       
+        if( A_DIFFUSION_COLONY_ONLY[elemIdx] ) {
+            REAL scale = v_gridModelReal1[GRID_MODEL_REAL_COLONY_VOL_RATIO];
+            CHECK( scale <= 1.0 );
+            gridBeta1 *= scale;
+        }
+    }
+
+    if ( SYSTEM_DIMENSION == 2 ) {
+        if ( vIdx0[2] > 0 )
+            gridBeta0 = 0.0 ;
+        if ( vIdx1[2] > 0 )
+            gridBeta1 = 0.0 ;
     }
 
     if( ( gridBeta0 > 0.0 ) && ( gridBeta1 > 0.0 ) ) {
@@ -431,7 +447,7 @@ void ModelRoutine::initPDEBufferPhi( const VIdx& startVIdx, const VIdx& pdeBuffe
 #endif
 
     for( S32 pdeIdx = 0 ; pdeIdx < NUM_DIFFUSIBLE_ELEMS ; pdeIdx++ ) {
-	v_gridPhi[ pdeIdx] = A_INIT_CONCENTRATION[pdeIdx];
+	v_gridPhi[ pdeIdx] = A_INIT_AGAR_CONCENTRATION[pdeIdx];
     }
 
 

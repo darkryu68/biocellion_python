@@ -28,6 +28,15 @@ void ModelRoutine::updateSpAgentOutput( const VIdx& vIdx, const SpAgent& spAgent
    v_extra[1] = spAgent.state.getModelReal( CELL_MODEL_REAL_BIOMAS );
    v_extra[2] = spAgent.state.getModelReal( CELL_MODEL_REAL_INERT );
 
+   // display values of ODEs  
+   for ( S32 i = 3 ; i < NUM_AGENT_OUTPUTS; i++ ) {
+       S32 type = spAgent.state.getType(); 
+       if ( AA_INDEX_ODE_OUTPUT[ type ][i-3] < 0 )
+           v_extra[i] = -1.0 ;  
+       else 
+          v_extra[i] = spAgent.state.getODEVal(0, AA_INDEX_ODE_OUTPUT[ type ][i-3] ) ;
+   }
+
    /* MODEL END */
    return;
 }
